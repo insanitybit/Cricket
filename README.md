@@ -12,7 +12,7 @@ Each instance maintains its own forward list of 'workers' and it will pass its
 queue to these periodically. This facilitates complex fuzzing structures.
 
 One could make two separate circular linked lists of cricket nodes with a single
-shared node in between them, leading to arbitrarily complex structures.
+shared node in between them, or any other complex structure.
 
 The goal of Cricket is to facilitate arbitrarily complex fuzzing structures to
 observe their effect on AFL, and eventually to implement genetic algorithms that
