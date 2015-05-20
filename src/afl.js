@@ -17,6 +17,7 @@ var afl = function() {
   this.hostname;
   this.construct();
   this.running = false;
+  this.fullargs;
 };
 
 // should no longer be necessary
@@ -49,16 +50,17 @@ afl.prototype.construct = function() {
 afl.prototype.start = function(aflargs,targetargs){
   if(this.running == false){
     console.log("starting afl");
-    var fullargs = this.genargs(aflargs, targetargs);
-    // console.log(fullargs[0]);
+    this.fullargs = this.genargs(aflargs, targetargs);
+    // console.log(this.fullargs[0]);
     // // spawn master
     //
     // // spawn the rest
     for(var i = 1; i < this.instance_count; i++){
-      this.aflprocs[i] = child.spawn(this.aflbin, fullargs[i]);
+      this.aflprocs[i] = child.spawn(this.aflbin, this.fullargs[i]);
     }
 
-    this.aflprocs[0] = child.spawn(this.aflbin, fullargs[0], { stdio: 'inherit' });
+    this.aflprocs[0] = child.spawn(this.aflbin, this.fullargs[0],
+                                  { stdio: 'inherit' });
     this.running = true;
   } else {
     console.log("AFL is already running on this system");
@@ -90,12 +92,22 @@ afl.prototype.genargs = function(aflargs, targetargs){
 
     fargs[i].push(this.target);
 
-    for(var j = 0; j < targetargs.length; j++){
-      fargs[i].push(targetargs[j]);
-    }
-
   }
 
+  for (var i = 0; i < this.instance_count; i++) {
+    for(var j = 0; j < aflargs.length; j++){
+      fargs[i].push(aflargs[j]);
+      if(aflargs[j] === '-f'){
+        fargs[i].push('../AFL/tmp/tmfile' + i);
+      }
+    }
+  }
+
+for (var i = 0; i < this.instance_count; i++) {
+  for(var j = 0; j < targetargs.length; j++){
+    fargs[i].push(targetargs[j]);
+  }
+}
   return fargs;
 
 }
@@ -114,9 +126,10 @@ afl.prototype.stop = function(){
 
 // TODO: implement pause/resume using -I- to restore a session
 afl.prototype.pause = function(){
-
+  for(var i = 1; i < this.aflprocs.length; i++){
+    this.aflprocs[i].kill('SIGINT');
+  }
 }
-
 
 /*
   get_queue will load up the queue from each fuzzer instance on the system,
