@@ -191,40 +191,42 @@ function loadlist(){
 
 /*
 
-	linknodes reads the pairs file, which is in format:
-	host
-	client
-	host
-	client
-	[...]
-
-	using the all_nodes map, emit to 'host' to connect to 'client'
-	TODO: the pairs array is likely redundant, and adding extra copies
-	remove it, and move hostnames directl into all_nodes
+	linknodes reads the pairs file ../config/pairs.json
+	If the .one host is MASTER, we (the master) directly link to .two
+	If the .two host is MASTER, we replace the the .two with the master hostname
+	Otherwise, send the .one the .two host to connect to
 */
 
 function linknodes(){
-	var tmp = fs.readFileSync(config + 'pairs').toString().split("\n");
-	var pairs = [];
+	var pairs = JSON.parse(fs.readFileSync(config+'pairs.json').toString()).nodes;
 
-	for(var i = 0; i < tmp.length; i++){
-		if(tmp[i] == "MASTER"){
-			tmp[i] = myhostname + ':' + port;
+	console.log(pairs);
+
+
+	for(var i = 0; i < pairs.length; i++){
+
+		if(pairs[i].one === "MASTER"){
+			var tw = new worker.worker();
+			tw.hostname = pairs[i].two;
+			tw.socket = ioClient(pairs[i].two);
+			next_nodes.push(tw);
+		} else if(pairs[i].two === "MASTER"){
+			pairs[i].two = myhostname;
+			all_nodes[pairs[i].one].emit('add_worker', pairs[i].two);
+			all_nodes[pairs[i].one].push_host(pairs[i].two);
+		} else {
+			all_nodes[pairs[i].one].emit('add_worker', pairs[i].two);
+			all_nodes[pairs[i].one].push_host(pairs[i].two);
 		}
-	}
 
-	if((tmp.length < 1)){
-		console.log("pairs is improperly formatted");
-		return;
 	}
 
 	var index = 0;
-	for (var i = 0; i < tmp.length; i+=2) {
-		pairs.push({one:tmp[i], two:tmp[i+1]})
-		// all_nodes[pairs[index].one].emit('add_worker', pairs[index].two);
-		// all_nodes[pairs[index].one].push_host(pairs[index].two);
-		// index++;
-	}
+	// for (var i = 0; i < tmp.length; i+=2) {
+	// 	// pairs.push({one:tmp[i], two:tmp[i+1]})
+
+	// 	// index++;
+	// }
 }
 /*
 

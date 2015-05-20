@@ -1,0 +1,12 @@
+{
+    "nodes": [
+        {
+            "one": "MASTER",
+            "two": "localhost:8888"
+        },
+        {
+            "one": "localhost:8888",
+            "two": "MASTER"
+        }
+    ]
+}
