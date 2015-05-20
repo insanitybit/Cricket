@@ -2,22 +2,24 @@
 Cricket is a NodeJS harness for the American Fuzzy Lopper (AFL) fuzzer:
 lcamtuf.coredump.cx/afl/README.txt
 
-AFL is a generic binary format fuzzer that uses binary (or QEMU) instrumentation
-to track a target's code paths in order to gauge fuzzing progress.
+Cricket's purpose is to allow for servers running AFL to share information in
+interesting ways. One example of this would be to have a network where each
+server maintains a connection to the next, forming a circular linked list:
 
-Instances of Cricket can be deployed across servers, allowing AFL to take
-advantage of multiple systems.
+A -> B -> C -> A
 
-Each instance maintains its own forward list of 'workers' and it will pass its
-queue to these periodically. This facilitates complex fuzzing structures.
+This would allow AFL data to be waterfalled periodically.
 
-One could make two separate circular linked lists of cricket nodes with a single
-shared node in between them, or any other complex structure.
+More complex structures can also be formed, such as one where two lists exist:
 
-The goal of Cricket is to facilitate arbitrarily complex fuzzing structures to
-observe their effect on AFL, and eventually to implement genetic algorithms that
-take advantage of these structures.
 
+A -> B -> C -> A
+
+D -> E -> F -> A -> D
+
+This would be two circular linked lists that share the single A node.
+
+The structures can be arbitrarily complex.
 
 Status:
 --------
@@ -26,7 +28,7 @@ Incomplete, not ready for use.
 
 Currently, Cricket is capable of:
 * Registering worker nodes
-* Passing /queue/ information across systems
+* Passing /queue/ information across systems periodically
 * Fuzzing across networks
 
 The above are the bare bones capabilities of Cricket, the future versions will
