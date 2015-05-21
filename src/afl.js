@@ -18,6 +18,7 @@ var afl = function() {
   this.construct();
   this.running = false;
   this.fullargs;
+  this.displays    = [];
 };
 
 // should no longer be necessary
@@ -47,29 +48,32 @@ afl.prototype.construct = function() {
 // for each process
 
 // ./afl-fuzz -i testcase_dir -o sync_dir -S fuzzer03 [...other stuff...]
-afl.prototype.start = function(aflargs,targetargs){
+afl.prototype.start = function(aflargs,targetargs, resume){
   if(this.running == false){
     console.log("starting afl");
-    this.fullargs = this.genargs(aflargs, targetargs);
+    this.fullargs = this.genargs(aflargs, targetargs, resume);
     // console.log(this.fullargs[0]);
-    // // spawn master
-    //
-    // // spawn the rest
     for(var i = 1; i < this.instance_count; i++){
       this.aflprocs[i] = child.spawn(this.aflbin, this.fullargs[i]);
     }
 
-    this.aflprocs[0] = child.spawn(this.aflbin, this.fullargs[0],
-                                  { stdio: 'inherit' });
+    this.aflprocs[0] = child.spawn(this.aflbin, this.fullargs[0]);//,
+    // {  stdio: [
+    //   0, // use parents stdin for child
+    //   'pipe', // pipe child's stdout to parent
+    //   'pipe' // direct child's stderr to a file
+    // ]});
     this.running = true;
   } else {
     console.log("AFL is already running on this system");
   }
+
+  this.regstdout();
 }
 
 // ./afl-fuzz -i testcase_dir -o sync_dir -S fuzzer03 [...other stuff...]
 // TODO: Move args to config.ini and allow cricket to determine -M/-S
-afl.prototype.genargs = function(aflargs, targetargs){
+afl.prototype.genargs = function(aflargs, targetargs, resume){
 
   var fargs        = [];
 
@@ -85,7 +89,12 @@ afl.prototype.genargs = function(aflargs, targetargs){
     }
 
     fargs[i].push('-i');
-    fargs[i].push(this.testcases);
+
+    if(resume === true){
+      fargs[i].push('-');
+    } else {
+      fargs[i].push(this.testcases);
+    }
 
     fargs[i].push('-o');
     fargs[i].push(this.sync_dir);
@@ -98,16 +107,16 @@ afl.prototype.genargs = function(aflargs, targetargs){
     for(var j = 0; j < aflargs.length; j++){
       fargs[i].push(aflargs[j]);
       if(aflargs[j] === '-f'){
-        fargs[i].push('../AFL/tmp/tmfile' + i);
+        fargs[i].push(this.afldir + 'tmp/tmfile' + i);
       }
     }
   }
 
-for (var i = 0; i < this.instance_count; i++) {
-  for(var j = 0; j < targetargs.length; j++){
-    fargs[i].push(targetargs[j]);
+  for (var i = 0; i < this.instance_count; i++) {
+    for(var j = 0; j < targetargs.length; j++){
+      fargs[i].push(targetargs[j]);
+    }
   }
-}
   return fargs;
 
 }
@@ -126,9 +135,54 @@ afl.prototype.stop = function(){
 
 // TODO: implement pause/resume using -I- to restore a session
 afl.prototype.pause = function(){
-  for(var i = 1; i < this.aflprocs.length; i++){
+  for(var i = 0; i < this.aflprocs.length; i++){
     this.aflprocs[i].kill('SIGINT');
   }
+}
+
+
+// Currently broken, regstdout and display are used to control which fuzzer
+// is displaying at any given time. Right now the issue is that i cant seem to
+// update self.displays, due to scoping issues, so it never updates
+// Though I have confirmed that this method *would* work otherwise.
+afl.prototype.regstdout = function(){
+  for (var i = 0; i < this.aflprocs.length; i++) {
+    this.displays[i] = false;
+  }
+
+
+  for (var i = 0; i < this.aflprocs.length; i++) {
+    var self = this;
+    this.aflprocs[i].stdout.on('data', function (data) {
+      console.log(self.displays[i]);
+        if(self.displays[i] === true)
+        {    process.stdout.write(data.toString());    }
+    });
+
+    this.aflprocs[i].stderr.on('data', function (data) {
+      console.log("more errors");
+        // if(this.displays[i] === true)
+        // {    process.stdout.write(data.toString());    }
+    });
+  }
+}
+
+afl.prototype.display = function(index){
+  for (var i = 0; i < this.aflprocs.length; i++) {
+    this.displays[i] = false;
+  }
+
+  this.displays[index] = true;
+}
+
+afl.prototype.resume = function(){
+
+}
+
+afl.prototype.whatsup = function(){
+  this.aflprocs[0] = child.spawn(this.afldir + 'afl-whatsup',
+                                 [this.sync_dir],
+                                { stdio: 'inherit' });
 }
 
 /*
@@ -178,6 +232,10 @@ exports.genargs       = afl.prototype.genargs;
 exports.start         = afl.prototype.start;
 exports.stop          = afl.prototype.stop;
 exports.pause         = afl.prototype.pause;
+
+exports.display       = afl.prototype.display;
+exports.whatsup       = afl.prototype.whatsup;
+exports.regstdout     = afl.prototype.regstdout;
 
 exports.get_queue 	  = afl.prototype.get_queue;
 exports.write_queue   = afl.prototype.write_queue;

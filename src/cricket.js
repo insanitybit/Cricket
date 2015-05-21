@@ -24,16 +24,7 @@ var config = '../config/';
 var isMaster = false;
 
 
-if(argv.M){
-	isMaster = true;
-}
-
-if(argv.W){
-	if(argv.mp !== undefined){
-		var master = ioClient(argv.mp);
-		master.emit('register', myhostname + ":" + port);
-	}
-}
+handleargs(argv);
 
 app.listen(port);
 
@@ -50,10 +41,6 @@ var all_nodes 	= {};
 io.on('connection', function (socket) {
   console.log("new connection");
 
-
-	// 'add_worker' event:
-	// This event, when received, signals to add a 'hostname' to the
-	// worker's next_nodes array, creating a client socket to it
   socket.on('add_worker', function (hostname){
 		var tw = new worker.worker();
 		tw.hostname = hostname;
@@ -67,7 +54,7 @@ io.on('connection', function (socket) {
   });
 
   socket.on('send_queue', function (){
-    console.log("waterfall returns");ue
+    console.log("Sending queue now");
 
 		var myQueue = afl.get_queue();
 
@@ -81,12 +68,13 @@ io.on('connection', function (socket) {
 	//
 
   socket.on('take_queue', function (queue){
+		console.log("receiving queue now");
 		afl.write_queue(queue);
   });
 
-	socket.on('start_work', function (aflargs, targetargs){
+	socket.on('start_work', function (aflargs, targetargs, resume){
 		console.log("Starting work");
-		afl.start(aflargs, targetargs);
+		afl.start(aflargs, targetargs, resume);
 	});
 
 });
@@ -95,8 +83,6 @@ io.on('connection', function (socket) {
 // Events meant for the master
 
 io.on('connection', function (socket) {
-
-
 	// Allows other nodes to register with the master
 	if(isMaster){
 		socket.emit('request_register', myhostname);
@@ -112,6 +98,28 @@ io.on('connection', function (socket) {
 	}
 
 });
+
+function handleargs(argv){
+
+	if((argv.M === false) && (argv.W === undefined)){
+		console.log("ERROR: Must provide -M or -W");
+		process.exit(1);
+	}
+
+	if(argv.M){
+		isMaster = true;
+	}
+
+	if(argv.W){
+		if(argv.mp !== undefined){
+			var master = ioClient(argv.mp);
+			master.emit('register', myhostname + ":" + port);
+		}
+	}
+}
+
+
+
 
 var readline = require('readline');
 
@@ -157,9 +165,18 @@ rl.on('line', function (cmd) {
 			pause();
 			break;
 
+		case "resume":
+			resume();
+			break;
+
+		case "whatsup":
+			afl.whatsup();
+			break;
+
     default:
 			console.log("load\nlink\nwork\n"
-			+ "stop\npause\npassq\ndisplayall");
+			+ "stop\npause\npassq\ndisplayall\n"
+			+ "whatsup\n");
       break;
   }
 });
@@ -188,7 +205,6 @@ function loadlist(){
 	});
 }
 
-
 /*
 
 	linknodes reads the pairs file ../config/pairs.json
@@ -199,9 +215,6 @@ function loadlist(){
 
 function linknodes(){
 	var pairs = JSON.parse(fs.readFileSync(config+'pairs.json').toString()).nodes;
-
-	console.log(pairs);
-
 
 	for(var i = 0; i < pairs.length; i++){
 
@@ -220,22 +233,7 @@ function linknodes(){
 		}
 
 	}
-
-	var index = 0;
-	// for (var i = 0; i < tmp.length; i+=2) {
-	// 	// pairs.push({one:tmp[i], two:tmp[i+1]})
-
-	// 	// index++;
-	// }
 }
-/*
-
-	pairs.push({one:tmp[i], two:tmp[i+1]});
-	all_nodes[pairs[i].one].emit('add_worker', pairs[i].two);
-	all_nodes[pairs[i].one].push_host(pairs[i].two);
-*/
-
-
 
 /*
 	startwork emits the 'start_work' event to every worker in all_nodes
@@ -258,14 +256,11 @@ function startwork(){
 
 	Object.keys(all_nodes).forEach(function(key) {
 		var val = all_nodes[key];
-
 		// Tell the other workers it's time to start
-		val.socket.emit('start_work', aflargs, targs);
-
-		// val.socket.emit('start_work', aargs, targs);
+		val.socket.emit('start_work', aflargs, targs, false);
 	});
 
-	afl.start(aflargs, targs);
+	afl.start(aflargs, targs, false);
 	// afl.start(aflargs, targetargs);
 	setInterval(function(){
 		 console.log("emitting pass_queue");
@@ -283,22 +278,53 @@ function pause(){
 	// Also, make sure to pause queue interval
 }
 
+
+// TODO: Detect when to resume and when to start, and build that into the
+// cricket logic so that it's only one command
+function resume(){
+	var config     = ini.parse(fs.readFileSync('../config/config.ini', 'utf-8'));
+
+	var aflargs = config.afl.args.aargs;
+	if(aflargs == 'null')
+		aflargs = [];
+
+	var targs = config.target.args.targs;
+	if(targs == 'null')
+		targs = [];
+
+	var interval = config.interval.minutes;
+
+	interval = interval * 60 * 1000;
+
+	Object.keys(all_nodes).forEach(function(key) {
+		var val = all_nodes[key];
+		// Tell the other workers it's time to start
+		val.socket.emit('start_work', aflargs, targs, true);
+	});
+
+	afl.start(aflargs, targs, true);
+}
+
 function stopwork(){
 
 }
 
 function passq(){
-// do stuff
+	Object.keys(all_nodes).forEach(function(key) {
+		var val = all_nodes[key];
+		val.socket.emit('pass_queue');
+	});
 }
 
 // show hostname + next_hosts of hostname
 function displayall(){
+	afl.display(0);
 	// console.log("There are " + all_nodes.size + " nodes");
-	Object.keys(all_nodes).forEach(function(key) {
-	  var val = all_nodes[key];
-		for(var i = 0; i < val.next_hosts.length; i++){
-			console.log("item " + all_nodes[i]);
-		  console.log(val.hostname + "->" + val.next_hosts[i]);
-		}
-	});
+	// Object.keys(all_nodes).forEach(function(key) {
+	//   var val = all_nodes[key];
+	// 	for(var i = 0; i < val.next_hosts.length; i++){
+	// 		console.log("item " + all_nodes[i]);
+	// 	  console.log(val.hostname + "->" + val.next_hosts[i]);
+	// 	}
+	// });
 }
