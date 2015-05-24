@@ -5,15 +5,13 @@
 	--qi=[time]	Sets the interval (in minutes) for sending queues
 */
 
-"use strict";
-
-var app					= require('http').createServer(),
-		ioClient  	= require('socket.io-client'),
-		io 					= require('socket.io')(app),
-		worker			= require('./worker.js'),
-    fs          = require('fs'),
-		afl  				= require('./afl'),
-		ini       	= require('ini')
+var app						= require('http').createServer(),
+		ioClient  		= require('socket.io-client'),
+		io 						= require('socket.io')(app),
+		createWorker	= require('./worker.js').createWorker,
+    fs          	= require('fs'),
+		afl  					= require('./afl'),
+		ini       		= require('ini');
 
 var argv = require('minimist')(process.argv.slice(2));
 
@@ -39,12 +37,14 @@ var all_nodes 	= {};
 */
 
 io.on('connection', function (socket) {
+"use strict";
   console.log("new connection");
 
   socket.on('add_worker', function (hostname){
-		var tw = new worker.worker();
-		tw.hostname = hostname;
-		tw.socket = ioClient(hostname);
+		var tw = createWorker({
+			'hostname':hostname,
+			'socket':ioClient(hostname)
+			});
 		next_nodes.push(tw);
   });
 
@@ -89,9 +89,10 @@ io.on('connection', function (socket) {
 
 		socket.on('register', function (hostname){
 			console.log("registering new node: " + hostname);
-			var tw = new worker.worker();
-			tw.hostname = hostname;
-			tw.socket = ioClient(hostname);
+			var tw = createWorker({
+				'hostname':hostname,
+				'socket':ioClient(hostname)
+				});
 			all_nodes[hostname] = tw;
 		});
 
@@ -112,6 +113,7 @@ function handleargs(argv){
 
 	if(argv.W){
 		if(argv.mp !== undefined){
+			console.log("Registering with master")
 			var master = ioClient(argv.mp);
 			master.emit('register', myhostname + ":" + port);
 		}
@@ -157,8 +159,8 @@ rl.on('line', function (cmd) {
       passq();
       break;
 
-    case "displayall":
-      displayall();
+    case "display":
+      display();
       break;
 
 		case "pause":
@@ -174,9 +176,9 @@ rl.on('line', function (cmd) {
 			break;
 
     default:
-			console.log("load\nlink\nwork\n"
-			+ "stop\npause\npassq\ndisplayall\n"
-			+ "whatsup\n");
+			console.log("load\nlink\nwork" +
+			"\nstop\npause\npassq\ndisplayall" +
+			"\nwhatsup");
       break;
   }
 });
@@ -190,17 +192,19 @@ function loadlist(){
 	var config  = ini.parse(fs.readFileSync('../config/config.ini', 'utf-8'));
   var hosts 	= config.hostnames.hosts;
 
-  console.log("hosts read, pushing to nodelist");
-
   if(hosts.length === 0){
     console.log("no hosts found in file, nothing to do");
     return;
   }
 
+  console.log("hosts read, pushing to all nodes");
+
 	hosts.forEach(function(host){
-		var tw = new worker.worker();
-		tw.hostname = host;
-		tw.socket		= ioClient(host);
+		console.log("loading " + host);
+		var tw = createWorker({
+					'hostname':host,
+					'socket':ioClient(host)
+				});
 		all_nodes[host] = tw;
 	});
 }
@@ -219,17 +223,18 @@ function linknodes(){
 	for(var i = 0; i < pairs.length; i++){
 
 		if(pairs[i].one === "MASTER"){
-			var tw = new worker.worker();
-			tw.hostname = pairs[i].two;
-			tw.socket = ioClient(pairs[i].two);
+			var tw = createWorker({
+				'hostname':pairs[i].two,
+				'socket':ioClient(pairs[i].two)
+				});
 			next_nodes.push(tw);
 		} else if(pairs[i].two === "MASTER"){
 			pairs[i].two = myhostname;
-			all_nodes[pairs[i].one].emit('add_worker', pairs[i].two);
-			all_nodes[pairs[i].one].push_host(pairs[i].two);
+			all_nodes[pairs[i].one].socket.emit('add_worker', pairs[i].two);
+			all_nodes[pairs[i].one].pushHost(pairs[i].two);
 		} else {
-			all_nodes[pairs[i].one].emit('add_worker', pairs[i].two);
-			all_nodes[pairs[i].one].push_host(pairs[i].two);
+			all_nodes[pairs[i].one].socket.emit('add_worker', pairs[i].two);
+			all_nodes[pairs[i].one].pushHost(pairs[i].two);
 		}
 
 	}
@@ -276,6 +281,7 @@ function pause(){
 	// TODO: Imlpement pause with the following logic,
 	// Ctrl-C, then resume by replacing -i <dir> with -i-.
 	// Also, make sure to pause queue interval
+	afl.pause();
 }
 
 
@@ -284,9 +290,10 @@ function pause(){
 function resume(){
 	var config     = ini.parse(fs.readFileSync('../config/config.ini', 'utf-8'));
 
-	var aflargs = config.afl.args.aargs;
-	if(aflargs == 'null')
-		aflargs = [];
+	var tmpaflargs = config.afl.args.aargs;
+	var aflargs = [];
+	if(tmpaflargs[0] != 'null')
+		aflargs = tmpaflargs;
 
 	var targs = config.target.args.targs;
 	if(targs == 'null')
@@ -306,7 +313,7 @@ function resume(){
 }
 
 function stopwork(){
-
+	afl.stop();
 }
 
 function passq(){
@@ -317,7 +324,7 @@ function passq(){
 }
 
 // show hostname + next_hosts of hostname
-function displayall(){
+function display(){
 	afl.display(0);
 	// console.log("There are " + all_nodes.size + " nodes");
 	// Object.keys(all_nodes).forEach(function(key) {

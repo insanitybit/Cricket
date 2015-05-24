@@ -1,4 +1,4 @@
-"use strict";
+// "use strict";
 
 var os				= require('os'),
     fs        = require('fs-extra'),
@@ -57,7 +57,7 @@ afl.prototype.start = function(aflargs,targetargs, resume){
       this.aflprocs[i] = child.spawn(this.aflbin, this.fullargs[i]);
     }
 
-    this.aflprocs[0] = child.spawn(this.aflbin, this.fullargs[0]);//,
+    this.aflprocs[0] = child.spawn(this.aflbin, this.fullargs[0], {stdio:'inherit'});//,
     // {  stdio: [
     //   0, // use parents stdin for child
     //   'pipe', // pipe child's stdout to parent
@@ -68,7 +68,7 @@ afl.prototype.start = function(aflargs,targetargs, resume){
     console.log("AFL is already running on this system");
   }
 
-  this.regstdout();
+  // this.regstdout();
 }
 
 // ./afl-fuzz -i testcase_dir -o sync_dir -S fuzzer03 [...other stuff...]
@@ -127,47 +127,62 @@ afl.prototype.genargs = function(aflargs, targetargs, resume){
 });
 */
 afl.prototype.stop = function(){
-  for(var i = 1; i < this.aflprocs.length; i++){
-    this.aflprocs[i].kill('SIGINT');
+  var _this = this;
+  for(var i = 0; i < this.aflprocs.length; i++){
+    this.aflprocs[i].on('close', function (code, signal) {
+      //exit process here
+    });
+    this.aflprocs[i].kill('SIGHUP');
   }
 }
 
 
 // TODO: implement pause/resume using -I- to restore a session
 afl.prototype.pause = function(){
+  var _this = this;
   for(var i = 0; i < this.aflprocs.length; i++){
-    this.aflprocs[i].kill('SIGINT');
+    this.aflprocs[i].on('close', function (code, signal) {
+      _this.running = false;
+    });
+    this.aflprocs[i].kill('SIGHUP');
   }
 }
 
 
 // Currently broken, regstdout and display are used to control which fuzzer
-// is displaying at any given time. Right now the issue is that i cant seem to
-// update self.displays, due to scoping issues, so it never updates
-// Though I have confirmed that this method *would* work otherwise.
+// is displaying at any given time.
+// Broken right now.
 afl.prototype.regstdout = function(){
   for (var i = 0; i < this.aflprocs.length; i++) {
     this.displays[i] = false;
   }
 
-
+  var _this = this;
   for (var i = 0; i < this.aflprocs.length; i++) {
-    var self = this;
-    this.aflprocs[i].stdout.on('data', function (data) {
-      console.log(self.displays[i]);
-        if(self.displays[i] === true)
-        {    process.stdout.write(data.toString());    }
-    });
 
-    this.aflprocs[i].stderr.on('data', function (data) {
-      console.log("more errors");
-        // if(this.displays[i] === true)
-        // {    process.stdout.write(data.toString());    }
-    });
+    function closure() {
+      var state = {
+        index: i
+      };
+      // console.log(this.aflprocs);
+      _this.aflprocs[state.index].stdout.on('data', function (data) {
+        console.log(_this.displays[state.index]);
+          if(_this.displays[state.index] === true)
+          {    process.stdout.write(data.toString());    }
+      });
+
+      // this.aflprocs[state.index].stderr.on('data', function (data) {
+      //   console.log("more errors");
+      //     // if(this.displays[state.index] === true)
+      //     // {    process.stdout.write(data.toString());    }
+      // });
+    }
+    closure()
   }
 }
 
 afl.prototype.display = function(index){
+  console.log("display called");
   for (var i = 0; i < this.aflprocs.length; i++) {
     this.displays[i] = false;
   }
