@@ -1,0 +1,30 @@
+[package]
+name = "Cricket"
+version = "0.1.0"
+authors = ["insanitybit <insanitybit@gmail.com>"]
+
+[dependencies.url]
+git = "https://github.com/servo/rust-url"
+features = ["query_encoding"]
+
+[dependencies]
+iron = "*"
+router = "*"
+serde = "*"
+serde_macros = "*"
+hyper = "*"
+num_cpus = "*"
+csv = "*"
+rustc-serialize = "*"
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
