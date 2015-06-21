@@ -1,0 +1,32 @@
+
+'add_worker', function (hostname)
+
+When the add_worker event is recieved, the 'hostname' argument is used to Create
+a client Socket to that hostname. This new socket is stored in a Worker object,
+which is then stored in the next_nodes array.
+
+'request_register', function (masterhost)
+
+This event is emited by the master, telling new connections to register with
+the master. It sends the master's hostname so that the node can create a socket
+to it. See 'register' event below.
+
+'send_queue', function ()
+
+The send_queue event will alert the worker to load the AFL data required and pass
+it along to the next_nodes associated with it.
+
+'take_queue', function (queue)
+
+take_queue recieves another worker's queue and adds it to its own. The entirity
+of the queue is added to each AFL instance's queue.
+
+'start_work', function (aflargs, targetargs)
+
+This event will pass along the proper afl and target arguments for each worker.
+
+
+'register', function (hostname)
+
+When the master recieves the register event it adds the worker associated with
+the hostname argument to all_nodes.
