@@ -13,7 +13,10 @@ extern crate router;
 // extern crate serde;
 extern crate url;
 extern crate num_cpus;
-//
+extern crate threadpool;
+
+use std::sync::mpsc::channel;
+
 // use hyper::uri::RequestUri;
 // extern crate serialize;
 use std::collections::BTreeMap;
@@ -39,7 +42,8 @@ use std::fs::File;
 /// afl process children 'instances'
 pub struct AFL {
     opts: AFLOpts,
-    instances: Vec<Child>
+    instances: Vec<Child>,
+    pub test: String
 }
 
 /// AFLOpts holds the AFL environment data, such as the path to the sync directory,
@@ -55,13 +59,17 @@ pub struct AFLOpts {
     pub scheme: String,
     pub instance_count: usize
 }
-
+#[derive(RustcDecodable, RustcEncodable)]
+struct Stat {
+    msg: Vec<String>
+}
 impl AFL {
     /// Create a new AFL object, requires a fully instantiated AFLOpts
     pub fn new(opts: AFLOpts) -> AFL {
         AFL {
             instances: Vec::new(),
-            opts: opts
+            opts: opts,
+            test: "Constructor".to_owned()
         }
     }
 
@@ -80,14 +88,39 @@ impl AFL {
         self.opts.clone()
     }
 
+
     /// Unimplemented
-    pub fn get_stats(&self) -> String {
-        let output = Command::new(&self.opts.whatsup)
-                     .args(&vec![&self.opts.sync_dir])
-                     .stdout(Stdio::piped())
-                     .output()
-                     .unwrap_or_else(|e| { panic!("failed to execute process: {}", e) });
-         "".to_owned()
+    pub fn get_stats(&self) -> Stat {
+        let (tx, rx) = channel();
+
+        let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
+            match fs::read_dir(&self.opts.sync_dir) {
+                Err(why) => println!("! {:?}", why.kind()),
+                Ok(paths) => for path in paths {
+                        let tx = tx.clone();
+                        pool.execute(move|| {
+                            let p = path.unwrap().path().to_str()
+                            .unwrap().to_owned() + &"/fuzzer_stats".to_owned();
+                            if p.contains(".cur_input") {
+                                return
+                            }
+                            let mut f = File::open(&p).unwrap();
+
+                            let mut stats = String::with_capacity(600);
+                            f.read_to_string(&mut stats)
+                                        .unwrap_or_else(|e| panic!("fuzzer_stats open{}",e));
+                            tx.send(stats).unwrap();
+                        });
+                    },
+                }
+            drop(tx);
+        let mut stats = Vec::with_capacity(self.opts.instance_count);
+        for stat in rx.iter(){
+            stats.push(stat);
+        }
+        Stat {
+            msg: stats
+        }
     }
 
     /// Unimplemented
@@ -120,20 +153,27 @@ impl AFL {
     /// Takes in a BTreeMap of String, String representing Filename, Filedata
     /// Writes each file to each queue folder
     pub fn putq(&self, newq: &BTreeMap<String,String>){
+        // let (tx, rx) = channel();
+        let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
+
         match fs::read_dir(&self.opts.sync_dir) {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
-                    let p = path.unwrap().path().to_str()
-                    .unwrap().to_owned() + &"/queue/".to_owned();
-                    if p.contains(".cur_input") {continue};
+                    // let tx = tx.clone();
+                    pool.execute(move|| {
 
-                    // When selecting files, a genetic trait may determine how many are thrown
-                    // away, to determine this species' impact on the environment
-                    // For example a '.skip(n)' iterator could reduce the impact by 'n'
-                    for (key,value) in newq.iter(){
-                        let mut f = File::create("".to_owned() + &p + &key).unwrap();
-                        f.write_all(&value.as_bytes());
-                    }
+                        let p = path.unwrap().path().to_str()
+                        .unwrap().to_owned() + &"/queue/".to_owned();
+                        if p.contains(".cur_input") {return};
+
+                        // When selecting files, a genetic trait may determine how many are thrown
+                        // away, to determine this species' impact on the environment
+                        // For example a '.skip(n)' iterator could reduce the impact by 'n'
+                        for (key,value) in newq.iter(){
+                            let mut f = File::create("".to_owned() + &p + &key).unwrap();
+                            f.write_all(&value.as_bytes());
+                        }
+                    });
                 },
             }
     }
@@ -141,6 +181,9 @@ impl AFL {
     /// Returns a BTreeMap of every file in every queue
     /// Keys are the file names, Values are the file contents
     pub fn getq(&self) -> BTreeMap<String,String> {
+        let (tx, rx) = channel();
+        let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
+
         let mut files = BTreeMap::new();
         match fs::read_dir(&self.opts.sync_dir) {
             Err(why) => println!("! {:?}", why.kind()),
@@ -152,20 +195,25 @@ impl AFL {
                 match fs::read_dir(p) {
                        Err(why) => println!("! {:?}", why.kind()),
                        Ok(paths) => for path in paths {
-                            let p = path.unwrap().path().to_str().unwrap().to_owned();
-                            if p.contains(".state") {continue};
+                               let tx = tx.clone();
+                               pool.execute(move|| {
+                                    let p = path.unwrap().path().to_str().unwrap().to_owned();
+                                    if p.contains(".state") {return};
 
-                            let mut f = File::open(&p).unwrap();
-                            let mut s = String::new();
-                            f.read_to_string(&mut s);
-                            files.insert(PathBuf::from(p).file_name().unwrap().to_str()
-                            .unwrap().to_owned(),
-                            s);
+                                    let mut f = File::open(&p).unwrap();
+                                    let mut s = String::new();
+                                    f.read_to_string(&mut s);
+
+                                    tx.send((PathBuf::from(p).file_name().unwrap().to_str()
+                                            .unwrap().to_owned(),s)).unwrap();
+                                });
                        },
                    }
                 },
             }
-
+        for (a,b) in rx.iter(){
+        files.insert(a,b);
+        }
         files
     }
 

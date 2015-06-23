@@ -16,6 +16,11 @@ hyper = "*"
 num_cpus = "*"
 csv = "*"
 rustc-serialize = "*"
+nickel = "*"
+
+[dependencies.threadpool]
+version = "*"
+features = ["scoped-pool"]
 
 [profile.dev]
 opt-level = 0

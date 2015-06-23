@@ -68,8 +68,8 @@ fn recvq(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
 }
 
 fn stats(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
-    println!("STATS");
-    Ok(Response::with(status::Ok))
+    let stats = afl.get_stats();
+    Ok(Response::with(json::encode(&stats).unwrap()))
 }
 //
 // Receive a message by POST and play it back.
@@ -79,9 +79,8 @@ fn start(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
-    let mut new_afl = afl::AFL::new(
-        afl.get_opts());
-
+    let mut opts = afl.get_opts();
+    let mut new_afl = afl::AFL::new(opts);
     new_afl.launch(&payload);
 
     *afl = new_afl;
@@ -95,6 +94,7 @@ fn main() {
             ..Default::default()
             })
         ));
+
     let afl_start = afl.clone();
     let afl_stats = afl.clone();
     let afl_passq = afl.clone();
