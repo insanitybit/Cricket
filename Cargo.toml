@@ -17,6 +17,7 @@ num_cpus = "*"
 csv = "*"
 rustc-serialize = "*"
 nickel = "*"
+# rust-ini = "*"
 
 [dependencies.threadpool]
 version = "*"

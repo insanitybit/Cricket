@@ -4,13 +4,14 @@
 //!
 //! The AFL Module provides a simple interface to a group of running AFL instances
 //!
-
+#![allow(unused_features)]
+#![allow(unused_variables)]
 #![feature(custom_derive, plugin, fs_walk, convert)]
 extern crate csv;
-extern crate rustc_serialize;
+// extern crate rustc_serialize;
 extern crate iron;
 extern crate router;
-// extern crate serde;
+extern crate serde;
 extern crate url;
 extern crate num_cpus;
 extern crate threadpool;
@@ -38,6 +39,16 @@ use std::sync::mpsc;
 use std::fs::File;
 
 
+// trait Fuzzer<T: Fuzzer> {
+//     pub fn get_stats(&self) -> Stat;
+//
+//     pub fn putq(&self, newq: &BTreeMap<String,String>;
+//
+//     pub fn getq(&self) -> BTreeMap<String,String>;
+//
+//     pub fn launch(&mut self, msg: &str) -> &T;
+// }
+
 /// The AFL struct maintains an AFLOpts 'opts' (see AFLOpts), and a vector of
 /// afl process children 'instances'
 pub struct AFL {
@@ -49,6 +60,7 @@ pub struct AFL {
 /// AFLOpts holds the AFL environment data, such as the path to the sync directory,
 /// whether AFL is currently running, and the scheme to use when creating fuzzers.
 #[derive(Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct AFLOpts {
     pub afl_path: String,
     pub running: bool,
@@ -59,7 +71,8 @@ pub struct AFLOpts {
     pub scheme: String,
     pub instance_count: usize
 }
-#[derive(RustcDecodable, RustcEncodable)]
+
+#[derive(Serialize, Deserialize)]
 struct Stat {
     msg: Vec<String>
 }

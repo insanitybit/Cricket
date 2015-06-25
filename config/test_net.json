@@ -1,0 +1,19 @@
+{
+   "generation":0,
+   "mutation_rate":500,
+   "worker_count":1,
+   "workers":[
+     {
+        "http://localhost:3000":{
+           "args":[
+              "args"
+           ],
+           "generation":0,
+           "hostname":"http://localhost:3000",
+           "mutation_rate":0.0,
+           "neighbors":[
+           ],
+           "spread_rate":0
+        }
+     }]
+}

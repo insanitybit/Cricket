@@ -1,4 +1,6 @@
+#![allow(unused_features, unused_variables, unused_imports)]
 #![feature(custom_derive, plugin, fs_walk, convert)]
+#![plugin(serde_macros)]
 extern crate csv;
 // extern crate rustc_serialize;
 extern crate iron;
@@ -8,14 +10,14 @@ extern crate url;
 extern crate num_cpus;
 //
 // use hyper::uri::RequestUri;
-extern crate rustc_serialize;
+// extern crate rustc_serialize;
 extern crate hyper;
 
-use hyper::Client;
-use std::io::Read;
+    use hyper::Client;
+    use std::io::Read;
 
 use std::collections::BTreeMap;
-use rustc_serialize::json::{self, Json, Object, ToJson};
+// use rustc_serialize::json::{self, Json, Object, ToJson};
 
 
 use std::default::Default;
@@ -23,7 +25,7 @@ use std::slice;
 use iron::prelude::*;
 use iron::status;
 use router::Router;
-// use serde::json;
+use serde::json::{self, Value};
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Output, Stdio};
 use std::thread;
@@ -31,6 +33,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 mod afl;
 
+// takes CSV of hostnames. first host is key, other nodes are values
 fn sendq(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
     println!("SENDQ");
     let mut payload = String::new();
@@ -57,10 +60,11 @@ fn recvq(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
-    let payload = Json::from_str(&payload).unwrap().as_object().unwrap().clone();
-    //
+    let payload : Value = json::from_str(&payload).unwrap();
+    let payload = payload.as_object().unwrap();
+
     let payload : BTreeMap<String,String>
-    = payload.into_iter().map(|(k, v)| (k, v.as_string().unwrap().to_owned())).collect();
+    = payload.into_iter().map(|(k, v)| ((k.to_owned(), v.as_string().unwrap().to_owned()))).collect();
 
 
     afl.putq(&payload);
@@ -68,8 +72,9 @@ fn recvq(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
 }
 
 fn stats(request: &mut Request, afl: &mut afl::AFL) -> IronResult<Response> {
+    println!("STATS");
     let stats = afl.get_stats();
-    Ok(Response::with(json::encode(&stats).unwrap()))
+    Ok(Response::with(json::to_string(&stats).unwrap()))
 }
 //
 // Receive a message by POST and play it back.
