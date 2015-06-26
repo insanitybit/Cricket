@@ -14,15 +14,24 @@ extern crate hyper;
 use self::hyper::Client;
 use self::hyper::client::{IntoUrl, Response};
 use std::str::FromStr;
-
+use std::io;
+use std::num;
 use serde::json::{self, Value};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::prelude::*;
+use std::io::error;
 
-pub trait WorkerView {
+#[derive(Debug)]
+enum FuzzerError {
+    Io(io::Error),
+    Parse(num::ParseIntError),
+    Ser(serde::json::error::Error)
+}
+
+pub trait FuzzerView {
     fn get_stats(&self) -> String;
     // fn passq(&self, );
     fn score_stats(&self) -> u64;
@@ -39,7 +48,7 @@ pub struct AFLView {
     spread_rate: u64
 }
 
-impl WorkerView for AFLView {
+impl FuzzerView for AFLView {
     fn get_stats(&self) -> String {
         let mut client = Client::new();
         let mut s = String::with_capacity(512);
@@ -84,16 +93,14 @@ impl WorkerView for AFLView {
 
 
 #[derive(Serialize, Deserialize)]
-pub struct Network<T : WorkerView + serde::ser::Serialize + serde::de::Deserialize> {
+pub struct Network<T : FuzzerView + serde::ser::Serialize + serde::de::Deserialize> {
     workers:Vec<BTreeMap<String,T>>,
     worker_count: usize,
     generation: u64,
     mutation_rate: u64
 }
 
-// TODO: Grab this from disk, can be stored in json
-
-impl<T : WorkerView
+impl<T : FuzzerView
 + serde::ser::Serialize
 + serde::de::Deserialize> Network<T> {
     pub fn new() -> Network<T> {
@@ -105,17 +112,16 @@ impl<T : WorkerView
         }
     }
 
-    // implement proper error handling
-    pub fn load_network(path: String) -> Network<T> {
+    // implement proper error handling // Result<Network<T>,std::io::error>
+    pub fn load_network(path: String) -> Result<Network<T>,FuzzerError> {
         let mut s = String::new();
-        let mut f = File::open(&path)
-        .unwrap_or_else(|e| panic!("{}",e));
+        let mut f = try!(File::open(&path).map_err(FuzzerError::Io));
 
-        f.read_to_string(&mut s)
-        .unwrap_or_else(|e| panic!("{}",e));
+        try!(f.read_to_string(&mut s).map_err(FuzzerError::Io));
+
         // let s = json::from_
-        let net = json::from_str(&s).unwrap();
-        net
+        try!(json::from_str(&s).map_err(FuzzerError::Ser));
+        // Ok(net)
     }
 
     // implement proper error handling

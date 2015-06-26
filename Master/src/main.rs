@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::io::prelude::*;
 use std::fs;
-mod master;
-use master::{Network,AFLView};
+mod fuzzerview;
+use fuzzerview::{Network,AFLView,FuzzerView};
 
 fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size : &u64) -> u64 {
     let cur = population.len() as u64;
@@ -19,9 +19,13 @@ fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size
 
                 let path = path.unwrap().path().to_str()
                 .unwrap().to_owned();
-                population.push_back(
-                    Network::<AFLView>::load_network(path)
-                    );
+
+                match Network::<AFLView>::load_network(path) {
+                    Ok(network)     => population.push_back(network),
+                    Err(_)        => continue
+                }
+
+
             }
         }
     population.len() as u64 - cur
