@@ -1,6 +1,6 @@
 #![allow(unused_features)]
 #![allow(unused_variables)]
-#![feature(custom_derive, plugin, fs_walk, convert)]
+#![feature(custom_derive, plugin, fs_walk, convert, scoped)]
 #![plugin(serde_macros)]
 
 // extern crate csv;
@@ -10,32 +10,77 @@ extern crate serde;
 extern crate url;
 extern crate threadpool;
 extern crate hyper;
+extern crate num_cpus;
 
 use self::hyper::Client;
 use self::hyper::client::{IntoUrl, Response};
 use std::str::FromStr;
-use std::io;
-use std::num;
 use serde::json::{self, Value};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::prelude::*;
-use std::io::error;
-
-#[derive(Debug)]
-enum FuzzerError {
-    Io(io::Error),
-    Parse(num::ParseIntError),
-    Ser(serde::json::error::Error)
-}
+use std::{io,error};
+use std::error::Error;
+use std::convert::From;
+use std::fmt;
+use std::thread;
+use std::sync::{Arc, Mutex};
 
 pub trait FuzzerView {
     fn get_stats(&self) -> String;
-    // fn passq(&self, );
+    fn passq(&self, &str);
+}
+
+
+pub trait Genetic {
     fn score_stats(&self) -> u64;
-    fn get_spread_rate(&self) -> u64;
+    fn get_spread_rate(&self) -> u32;
+}
+
+#[derive(Debug,Display)]
+pub enum FuzzerError {
+    IoError(io::Error),
+    Ser(serde::json::error::Error)
+}
+
+impl fmt::Display for FuzzerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            FuzzerError::IoError(ref err) => write!(f, "IO error: {}", err),
+            FuzzerError::Ser(ref err) => write!(f, "Parse error: {}", err),
+        }
+    }
+}
+
+impl error::Error for FuzzerError {
+    fn description(&self) -> &str {
+        match *self {
+            FuzzerError::IoError(ref err) => err.description(),
+            FuzzerError::Ser(ref err) => error::Error::description(err),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            FuzzerError::IoError(ref err) => Some(err),
+            FuzzerError::Ser(ref err) => Some(err),
+        }
+    }
+}
+
+
+impl From<io::Error> for FuzzerError {
+    fn from(err: io::Error) -> FuzzerError {
+        FuzzerError::IoError(err)
+    }
+}
+
+impl From<serde::json::error::Error> for FuzzerError {
+    fn from(err: serde::json::error::Error) -> FuzzerError {
+        FuzzerError::Ser(err)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -45,21 +90,10 @@ pub struct AFLView {
     generation: u64,
     mutation_rate: f64,
     args: Vec<String>,
-    spread_rate: u64
+    spread_rate: u32
 }
 
-impl FuzzerView for AFLView {
-    fn get_stats(&self) -> String {
-        let mut client = Client::new();
-        let mut s = String::with_capacity(512);
-
-        let url =  self.hostname.clone() + &"/stats";
-        let url = url.into_url().unwrap();
-        let mut res = client.get(url).send().unwrap();
-        res.read_to_string(&mut s).unwrap();
-        s
-    }
-
+impl Genetic for AFLView {
     fn score_stats(&self) -> u64 {
         let titles = vec![
         "paths_total".to_owned(),
@@ -86,14 +120,39 @@ impl FuzzerView for AFLView {
         score
     }
 
-    fn get_spread_rate(&self) -> u64 {
+    fn get_spread_rate(&self) -> u32 {
         self.spread_rate
     }
+
 }
 
+impl FuzzerView for AFLView {
+    fn get_stats(&self) -> String {
+        let mut client = Client::new();
+        let mut s = String::with_capacity(512);
+
+        let url =  self.hostname.clone() + &"/stats";
+        let url = url.into_url().unwrap();
+        let mut res = client.get(url).send().unwrap();
+        res.read_to_string(&mut s).unwrap();
+        s
+    }
+
+    fn passq(&self, host: &str) {
+        let mut client = Client::new();
+        let mut s = String::new();
+
+        let url =  self.hostname.clone() + &"/passq";
+        let url = url.into_url().unwrap();
+        let mut res = client.post(url).send().unwrap();
+        res.read_to_string(&mut s).unwrap();
+    }
+
+}
 
 #[derive(Serialize, Deserialize)]
-pub struct Network<T : FuzzerView + serde::ser::Serialize + serde::de::Deserialize> {
+pub struct Network<T : FuzzerView + serde::ser::Serialize
+                     + serde::de::Deserialize + Genetic + Sync> {
     workers:Vec<BTreeMap<String,T>>,
     worker_count: usize,
     generation: u64,
@@ -102,7 +161,8 @@ pub struct Network<T : FuzzerView + serde::ser::Serialize + serde::de::Deseriali
 
 impl<T : FuzzerView
 + serde::ser::Serialize
-+ serde::de::Deserialize> Network<T> {
++ serde::de::Deserialize
++ Genetic + Sync> Network<T> {
     pub fn new() -> Network<T> {
         Network {
             workers:Vec::new(),
@@ -112,23 +172,25 @@ impl<T : FuzzerView
         }
     }
 
-    // implement proper error handling // Result<Network<T>,std::io::error>
     pub fn load_network(path: String) -> Result<Network<T>,FuzzerError> {
-        let mut s = String::new();
-        let mut f = try!(File::open(&path).map_err(FuzzerError::Io));
+        let mut s = String::with_capacity(256);
+        let mut f = try!(File::open(&path));
 
-        try!(f.read_to_string(&mut s).map_err(FuzzerError::Io));
+        try!(f.read_to_string(&mut s));
 
-        // let s = json::from_
-        try!(json::from_str(&s).map_err(FuzzerError::Ser));
-        // Ok(net)
+        let net : Network<T> = try!(json::from_str(&s));
+        Ok(net)
     }
 
     // implement proper error handling
-    pub fn save_network(&self, path: &str) {
+    pub fn save_network(&self, path: &str) -> Result<(()),FuzzerError> {
         let net = json::to_value(self);
-        let mut f = File::create(&path).unwrap();
-        f.write_all(&net.as_string().unwrap().as_bytes()).unwrap();
+        let jnet = &net.as_string().unwrap();
+
+
+        let mut f = try!(File::create(&path));
+        try!(f.write_all(jnet.as_bytes()));
+        Ok(())
     }
 
     pub fn score(&self) -> u64 {
@@ -142,15 +204,34 @@ impl<T : FuzzerView
         score
     }
 
-    pub fn launch(&self, lifespan: &u32) {
-        let mut intervals : Vec<u64> = Vec::with_capacity(self.worker_count);
-        for map in self.workers.iter() {
-            for (host, worker) in map {
-                intervals.push(*lifespan as u64 / worker.get_spread_rate());
+    /// Commands remote Fuzzer instances to begin work
+    /// Takes a callback, which must return a value of PartialEq + Eq
+    /// The callback acts as a fitness function
+    pub fn fuzz<F>(&self, lifespan: &u32, callback: F) where
+        F: Fn(&str, &T) {
+        // let mut intervals : Vec<u64> = Vec::with_capacity(self.worker_count);
+        // 15 minutes
+        // let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
+        let mut lifespan = lifespan.clone();
+        // let interval = lifespan / 5; // Every 3 minutes
 
+        while lifespan > 0 {
+            for worker in self.workers.iter() {
+                    for (key,value) in worker.iter() {
+                        let spread_rate = value.get_spread_rate();
+                        let mut interval = lifespan / spread_rate;
+                        // thread::scoped(move|| {
+                            while interval > 0 {
+                                value.passq(key);
+                                thread::sleep_ms(interval);
+                                interval -= spread_rate;
+                            }
+                        // });
+                        lifespan -= interval;
+                        callback(&key, &value);
+                    }
             }
         }
-
 
     }
 }

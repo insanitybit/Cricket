@@ -8,13 +8,13 @@ use std::io::prelude::*;
 use std::fs;
 mod fuzzerview;
 use fuzzerview::{Network,AFLView,FuzzerView};
+use std::sync::{Arc,Mutex};
 
 fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size : &u64) -> u64 {
     let cur = population.len() as u64;
         match fs::read_dir("./population/") {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
-
                 if population.len() as u64 >= *population_size {return population.len() as u64 - cur}
 
                 let path = path.unwrap().path().to_str()
@@ -24,22 +24,24 @@ fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size
                     Ok(network)     => population.push_back(network),
                     Err(_)        => continue
                 }
-
-
             }
         }
     population.len() as u64 - cur
 }
 
-fn main() {
-    let gen_speed_ms : u32 = 900000;
-    let mut population_size : u64= 5;
+#[derive(PartialEq,Eq)]
+struct Score {
+    average: u64,
+    total: u64,
+    individuals: Vec<u64>
+}
 
-    let mut population : VecDeque<Network<AFLView>> = VecDeque::with_capacity(population_size as usize);
+fn main() {
+    let mut population_size : u64= 5;
+    let mut lifespan : u32 = 900000;
+    let mut population = VecDeque::with_capacity(population_size as usize);
 
     fill_population(&mut population, &population_size);
-    let real_network = population.front().unwrap();
-    real_network.launch(&gen_speed_ms);
 
     let mut cur_score = 0;
     let mut tot_score = 0;
@@ -50,7 +52,24 @@ fn main() {
 
     loop {
         for network in population.iter() {
-            std::thread::sleep_ms(gen_speed_ms);
+            let real_network = population.front().unwrap();
+
+            let score = Arc::new(Mutex::new(Score {
+                average: 0,
+                total: 0,
+                individuals: Vec::new()
+            }));
+
+            let score_lck = score.clone();
+
+            real_network.fuzz(&lifespan, move |host:&str, fuzzview: &AFLView| {
+                     let score_lck = score_lck.lock().unwrap();
+                     
+                });
+
+            // After lifespan is 0
+            // scoring should be handled internally, or, a callback should be taken to
+            // execute every iteration
             cur_score = real_network.score();
             println!("Current network score: {}", cur_score );
             tot_score += cur_score;
