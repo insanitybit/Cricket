@@ -1,8 +1,8 @@
-//! AFL
+//! Fuzzer
 //!
 //! # Usage
 //!
-//! The AFL Module provides a simple interface to a group of running AFL instances
+//! The Fuzzer Module provides a simple interface to a group of locally fuzzer instances
 //!
 extern crate num_cpus;
 extern crate threadpool;

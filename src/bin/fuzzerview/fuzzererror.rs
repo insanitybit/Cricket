@@ -6,6 +6,7 @@ use std::error::Error;
 use std::convert::From;
 use std::fmt;
 
+// A set of errors that can occur while dealing with a fuzzer or fuzzerview
 #[derive(Debug)]
 pub enum FuzzerError {
     IoError(io::Error),
