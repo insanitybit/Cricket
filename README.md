@@ -1,20 +1,25 @@
 # Cricket
-Cricket is a project to act as a distributed harness for AFL, managing it
-across a network.
+Cricket is a project to act as a distributed fuzzing harness, managing them
+across a network. Currently AFL (http://lcamtuf.coredump.cx/afl/) is supported.
+
+AFL is wrapped in a Fuzzer trait, so any other fuzzer that implements the trait
+will be compatible, allowing for different types of fuzzing to occur.
+
+Cricket supports complex, graph-based, network structures. This allows for
+simple programmatic manipulation of the network structure.
 
 # Status
-The interface for Fuzzer and FuzzerView is complete, though there will likely
-be a Harness struct that acts as an HTTP interface to the Fuzzer.
-
-The Master is able to:
-* Save, load network configurations
-* Create a Network representation
-* Get stats on individual FuzzViews
+Current:
+* Can load, save Network configurations.
+* Can command AFLFuzzer instances to send/receive fuzzer_stats, queue data
+* Can launch AFLFuzzer instances with custom arguments - more ergonomic support
+  to come later.
 
 In Progress:
-* Controlling data flow through FuzzerView and Network structs
-* Proper fitness function for AFLView
+* Automating data flow through FuzzerView and Network structs
+* Proper fitness function for AFLView and Network structs
 * Harness to wrap the REST API in 'worker' into a trait
+* Score trait to assist in more complex fitness functions
 
 Future:
 * Reproduction capabilities for Network and FuzzerView
