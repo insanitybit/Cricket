@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 // use rustc_serialize::json::{self, Json, Object, ToJson};
 
 
+use self::hyper::client::IntoUrl;
 use std::default::Default;
 use std::slice;
 use iron::prelude::*;
@@ -34,23 +35,18 @@ use std::sync::mpsc;
 mod fuzzer;
 use fuzzer::{AFL,AFLOpts,Fuzzer};
 
-// takes CSV of hostnames. first host is key, other nodes are values
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
-    println!("SENDQ");
+    let mut client = Client::new();
     let mut payload = String::new();
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
-    let payload = payload.split(",").collect::<Vec<&str>>();
-
     let queue = afl.getq();
 
-    let mut client = Client::new();
-
-    for host in payload {
-        for (_,value) in queue.iter() {
-            client.post(host).body(value).send().unwrap();
-        }
+    for (_,value) in queue.iter() {
+        let url =  payload.clone() + &"/passq";
+        let url = url.into_url().unwrap();
+        client.post(url).body(value).send().unwrap();
     }
 
     Ok(Response::with(status::Ok))
@@ -66,7 +62,6 @@ fn recvq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 
     let payload : BTreeMap<String,String>
     = payload.into_iter().map(|(k, v)| ((k.to_owned(), v.as_string().unwrap().to_owned()))).collect();
-
 
     afl.putq(&payload);
     Ok(Response::with(status::Ok))
@@ -84,7 +79,7 @@ fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     let mut payload = String::new();
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
-
+    
     let mut opts = afl.get_opts();
     let mut new_afl = AFL::new(opts);
     new_afl.launch(&payload);

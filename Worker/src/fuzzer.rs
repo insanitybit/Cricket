@@ -105,7 +105,7 @@ impl AFL {
     /// If you wish to change the current options, instead
     /// create a new AFL object and provide the constructor
     /// with get_opts()
-    /// ```
+    /// ```rust
     /// // Example of increasing afl instance_count after launch
     /// let mut opts = afl.get_opts();
     /// opts.instance_count += 2;
@@ -226,7 +226,7 @@ impl Fuzzer for AFL {
                 },
             }
         for (a,b) in rx.iter(){
-        files.insert(a,b);
+            files.insert(a,b);
         }
         files
     }
