@@ -1,10 +1,5 @@
-extern crate iron;
-extern crate router;
 extern crate serde;
-extern crate url;
-extern crate threadpool;
 extern crate hyper;
-extern crate num_cpus;
 
 use self::hyper::Client;
 use self::hyper::client::IntoUrl;

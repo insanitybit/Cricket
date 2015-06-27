@@ -2,11 +2,11 @@
 #![plugin(serde_macros)]
 extern crate serde;
 
-use std::collections::VecDeque;
-use std::fs;
 mod fuzzerview;
 use fuzzerview::{Network,AFLView,FuzzerView};
 use std::sync::{Arc,Mutex};
+use std::collections::VecDeque;
+use std::fs;
 
 fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size : &u64) -> u64 {
     let cur = population.len() as u64;

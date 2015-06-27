@@ -7,14 +7,14 @@ extern crate serde;
 extern crate hyper;
 
 use hyper::Client;
-use std::io::Read;
-use std::collections::BTreeMap;
 use self::hyper::client::IntoUrl;
-use std::default::Default;
-use iron::prelude::*;
 use iron::status;
+use iron::prelude::*;
 use router::Router;
 use serde::json::{self, Value};
+use std::io::Read;
+use std::collections::BTreeMap;
+use std::default::Default;
 use std::sync::{Arc, Mutex};
 
 mod fuzzer;
@@ -36,6 +36,7 @@ fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 
     Ok(Response::with(status::Ok))
 }
+
 fn recvq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("RECVQ");
     let mut payload = String::new();
