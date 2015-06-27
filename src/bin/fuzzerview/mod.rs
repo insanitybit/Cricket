@@ -1,3 +1,4 @@
+#![feature(scoped)]
 /// FuzzerView
 ///
 /// # Usage
@@ -18,26 +19,26 @@ use std::error::Error;
 use std::thread;
 
 mod fuzzererror;
-use self::fuzzererror::FuzzerError;
-
+use self::fuzzererror::*;
 
 /// Trait for types that represent a [Fuzzer](https://en.wikipedia.org/wiki/Fuzz_testing) across
 /// a network.
 ///
 /// FuzzerView
 pub trait FuzzerView {
-    fn get_stats(&self) -> String;
-    fn passq(&self, &str);
+    fn get_stats(&self) -> Result<String,FuzzerError>;
+    fn passq(&self, &str) -> Result<(), FuzzerError>;
 }
-
 
 /// Trait that defines a Genetic type, one that can score itself, and provide a rate of
 /// reproduction
 pub trait Genetic {
-    // Returns a u64 representation of its score - to be replaced with Score trait
-    fn score_stats(&self) -> u64;
-    // Returns the number of milliseconds representing a rate of reproduction
+    /// Returns a u64 representation of its score - to be replaced with Score trait
+    fn score_stats(&self) -> Result<u64,FuzzerError>;
+    /// Returns the number of milliseconds representing a rate of reproduction
     fn get_reproduction_rate(&self) -> u32;
+
+    // mutate(&mut self);
 }
 
 /// AFLView
@@ -51,7 +52,6 @@ pub trait Genetic {
 /// }
 /// ```
 /// AFLView represents a 'view' of an AFL fuzzer across a network.
-
 #[derive(Serialize, Deserialize)]
 pub struct AFLView {
     hostname: String,
@@ -63,27 +63,29 @@ pub struct AFLView {
 }
 
 impl FuzzerView for AFLView {
-    // Returns a String, representing the stats of the AFL instance behind this AFLView
-    fn get_stats(&self) -> String {
+    /// Returns a String, representing the stats of the AFL instance behind this AFLView
+    fn get_stats(&self) -> Result<String, FuzzerError> {
         let client = Client::new();
         let mut s = String::with_capacity(512);
 
         let url =  self.hostname.clone() + &"/stats";
         let url = url.into_url().unwrap();
-        let mut res = client.get(url).send().unwrap();
+
+        let mut res = try!(client.get(url).send());
         res.read_to_string(&mut s).unwrap();
-        s
+        Ok(s)
     }
 
     /// Commands the AFL Fuzzer to pass its queue to another host
-    fn passq(&self, host: &str) {
+    fn passq(&self, host: &str) -> Result<(), FuzzerError> {
         let client = Client::new();
         // let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/passq";
         let url = url.into_url().unwrap();
-        let mut res = client.post(url).body(host).send().unwrap();
+        let mut res = try!(client.post(url).body(host).send());
         // res.read_to_string(&mut s).unwrap();
+        Ok(())
     }
 
 }
@@ -91,29 +93,32 @@ impl FuzzerView for AFLView {
 impl Genetic for AFLView {
     /// Currently adds up the paths_total, paths_found, max_depth and returns it
     /// See AFL official docs for details
-    fn score_stats(&self) -> u64 {
-        let titles = vec![
-        "paths_total".to_owned(),
-        "paths_found".to_owned(),
-        "max_depth".to_owned()];
-
-        let stats : Vec<String> = json::from_str(&self.get_stats()).unwrap();
-        let mut score : u64 = 0;
-
-        for stat in stats.iter() {
-            let stats : Vec<String> = stat.split("\n")
-            .map(|s| s.replace(" ", "").to_owned()).collect();
-
-            for stat in stats {
-                let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
-                if stat.len() != 2 {continue};
-                if titles.contains(&stat[0]) {
-                    let s : Result<u64,_> = FromStr::from_str(&stat[1]);
-                    score += s.unwrap();
-                }
-            }
-        }
-        score
+    fn score_stats(&self) -> Result<u64,FuzzerError> {
+        unimplemented!();
+        // let titles = vec![
+        // "paths_total".to_owned(),
+        // "paths_found".to_owned(),
+        // "max_depth".to_owned()];
+        //
+        // let stats = try!(&self.get_stats());
+        //
+        // let stats : Vec<String> = json::from_str(stats).unwrap();
+        // let mut score : u64 = 0;
+        //
+        // for stat in stats.iter() {
+        //     let stats : Vec<String> = stat.split("\n")
+        //     .map(|s| s.replace(" ", "").to_owned()).collect();
+        //
+        //     for stat in stats {
+        //         let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
+        //         if stat.len() != 2 {continue};
+        //         if titles.contains(&stat[0]) {
+        //             let s : Result<u64,_> = FromStr::from_str(&stat[1]);
+        //             score += s.unwrap();
+        //         }
+        //     }
+        // }
+        // score
     }
 
     /// Returns the AFLView's reproduction rate
@@ -185,7 +190,7 @@ impl<T : FuzzerView
         for worker in self.workers.iter() {
 
             for view in worker.values() {
-                score += view.score_stats();
+                // score += view.score_stats();
             }
         }
         score

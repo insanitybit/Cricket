@@ -196,13 +196,13 @@ impl Fuzzer for AFL {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
                 let p = match path {
-                    Ok(p) => p,
-                    Err(_)    => continue
+                    Ok(p)   => p,
+                    Err(_)  => continue
                 };
 
                 let p = match p.path().to_str() {
-                    Some(p)   => p.to_owned() + &"/queue/".to_owned(),
-                    None  => continue
+                    Some(p) => p.to_owned() + &"/queue/".to_owned(),
+                    None    => continue
                 };
                 if p.contains(".cur_input") {continue};
 
@@ -212,34 +212,34 @@ impl Fuzzer for AFL {
                                let tx = tx.clone();
                                pool.execute(move|| {
                                    let p = match path {
-                                       Ok(p) => p,
-                                       Err(_)    => return
+                                       Ok(p)    => p,
+                                       Err(_)   => return
                                    };
 
                                    let p = match p.path().to_str() {
-                                       Some(p)   => p.to_owned(),
-                                       None  => return
+                                       Some(p)  => p.to_owned(),
+                                       None     => return
                                    };
                                     if p.contains(".state") {return};
 
                                     let mut f = match File::open(&p) {
-                                        Ok(f) => f,
-                                        Err(_)    => return
+                                        Ok(f)   => f,
+                                        Err(_)  => return
                                     };
                                     let mut s = String::new();
                                     match f.read_to_string(&mut s) {
-                                        Ok(_) => (),
-                                        Err(_)    => return
+                                        Ok(_)   => (),
+                                        Err(_)  => return
                                     };
                                     let name = PathBuf::from(p);
 
                                     let name = match name.file_name() {
-                                        Some(name)    => name,
-                                        None      => return
+                                        Some(n) => n,
+                                        None    => return
                                     };
 
                                     let name = match name.to_str() {
-                                        Some(name)  => name,
+                                        Some(n)  => n,
                                         None        => return
                                     };
 
