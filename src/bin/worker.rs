@@ -1,11 +1,9 @@
 #![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
-extern crate csv;
+
 extern crate iron;
 extern crate router;
 extern crate serde;
-extern crate url;
-extern crate num_cpus;
 extern crate hyper;
 
 use hyper::Client;

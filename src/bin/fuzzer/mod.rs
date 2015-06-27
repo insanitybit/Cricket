@@ -4,13 +4,8 @@
 //!
 //! The AFL Module provides a simple interface to a group of running AFL instances
 //!
-extern crate iron;
-extern crate router;
-extern crate serde;
-extern crate url;
 extern crate num_cpus;
 extern crate threadpool;
-extern crate hyper;
 
 use std::sync::mpsc::channel;
 use std::collections::BTreeMap;

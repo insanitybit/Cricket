@@ -1,8 +1,4 @@
-extern crate iron;
-extern crate router;
 extern crate serde;
-extern crate url;
-extern crate hyper;
 
 use std::io::prelude::*;
 use std::{io,error};
