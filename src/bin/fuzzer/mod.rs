@@ -161,13 +161,23 @@ impl Fuzzer for AFL {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
                     pool.execute(move|| {
-                        let p = path.unwrap().path().to_str()
-                        .unwrap().to_owned() + &"/queue/".to_owned();
+                        let p = match path {
+                            Ok(p) => p,
+                            Err(_)    => return
+                        };
+
+                        let p = match p.path().to_str() {
+                            Some(p)   => p.to_owned() + &"/queue/".to_owned(),
+                            None  => return
+                        };
 
                         if p.contains(".cur_input") {return};
 
                         for (key,value) in newq.iter(){
-                            let mut f = File::create("".to_owned() + &p + &key).unwrap();
+                            let mut f = match File::create("".to_owned() + &p + &key) {
+                                Ok(f) => f,
+                                Err(_)    => continue
+                            };
                             f.write_all(&value.as_bytes()).unwrap();
                         }
                     });
@@ -185,8 +195,15 @@ impl Fuzzer for AFL {
         match fs::read_dir(&self.opts.sync_dir) {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
-                let p = path.unwrap().path().to_str()
-                .unwrap().to_owned() + &"/queue/".to_owned();
+                let p = match path {
+                    Ok(p) => p,
+                    Err(_)    => continue
+                };
+
+                let p = match p.path().to_str() {
+                    Some(p)   => p.to_owned() + &"/queue/".to_owned(),
+                    None  => continue
+                };
                 if p.contains(".cur_input") {continue};
 
                 match fs::read_dir(p) {
@@ -194,15 +211,39 @@ impl Fuzzer for AFL {
                        Ok(paths) => for path in paths {
                                let tx = tx.clone();
                                pool.execute(move|| {
-                                    let p = path.unwrap().path().to_str().unwrap().to_owned();
+                                   let p = match path {
+                                       Ok(p) => p,
+                                       Err(_)    => return
+                                   };
+
+                                   let p = match p.path().to_str() {
+                                       Some(p)   => p.to_owned(),
+                                       None  => return
+                                   };
                                     if p.contains(".state") {return};
 
-                                    let mut f = File::open(&p).unwrap();
+                                    let mut f = match File::open(&p) {
+                                        Ok(f) => f,
+                                        Err(_)    => return
+                                    };
                                     let mut s = String::new();
-                                    f.read_to_string(&mut s).unwrap();
+                                    match f.read_to_string(&mut s) {
+                                        Ok(_) => (),
+                                        Err(_)    => return
+                                    };
+                                    let name = PathBuf::from(p);
 
-                                    tx.send((PathBuf::from(p).file_name().unwrap().to_str()
-                                            .unwrap().to_owned(),s)).unwrap();
+                                    let name = match name.file_name() {
+                                        Some(name)    => name,
+                                        None      => return
+                                    };
+
+                                    let name = match name.to_str() {
+                                        Some(name)  => name,
+                                        None        => return
+                                    };
+
+                                    tx.send((name.to_owned(),s)).unwrap();
                                 });
                        },
                    }
@@ -224,17 +265,30 @@ impl Fuzzer for AFL {
                 Ok(paths) => for path in paths {
                         let tx = tx.clone();
                         pool.execute(move|| {
-                            let p = path.unwrap().path().to_str()
-                            .unwrap().to_owned() + &"/fuzzer_stats".to_owned();
+                            let p = match path {
+                                Ok(p) => p,
+                                Err(_)    => return
+                            };
+
+                            let p = match p.path().to_str() {
+                                Some(p)   => p.to_owned() + &"/fuzzer_stats".to_owned(),
+                                None  => return
+                            };
                             if p.contains(".cur_input") {
                                 return
                             }
-                            let mut f = File::open(&p).unwrap();
+                            let mut f = match File::open(&p) {
+                                Ok(f) => f,
+                                Err(_)    => return
+                            };
 
                             let mut stats = String::with_capacity(600);
-                            f.read_to_string(&mut stats)
-                                        .unwrap_or_else(|e| panic!("fuzzer_stats open{}",e));
-                            tx.send(stats).unwrap();
+
+                            match f.read_to_string(&mut stats) {
+                                Ok(_) => tx.send(stats).unwrap(),
+                                Err(_)    => return
+                            }
+
                         });
                     },
                 }
