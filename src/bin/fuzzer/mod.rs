@@ -4,11 +4,6 @@
 //!
 //! The AFL Module provides a simple interface to a group of running AFL instances
 //!
-#![allow(unused_features)]
-#![allow(unused_variables)]
-#![feature(custom_derive, plugin, fs_walk, convert)]
-extern crate csv;
-// extern crate rustc_serialize;
 extern crate iron;
 extern crate router;
 extern crate serde;
@@ -16,62 +11,42 @@ extern crate url;
 extern crate num_cpus;
 extern crate threadpool;
 extern crate hyper;
+
 use std::sync::mpsc::channel;
-
-// extern crate serialize;
 use std::collections::BTreeMap;
-
-use hyper::Client;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::default::Default;
-use std::slice;
-use iron::prelude::*;
-use std::io::prelude::*;
-use iron::status;
-use router::Router;
-use serde::json::{self, Value};
-use std::sync::{Arc, Mutex};
-use std::process::{Command, Child, Output, Stdio};
-use std::thread;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
 use std::fs::File;
+use std::io::prelude::*;
+use std::path::PathBuf;
+use std::default::Default;
+use std::process::{Command, Child};
 
-
-// trait Fuzzer<T: Fuzzer> {
-//     pub fn get_stats(&self) -> Stat;
-//
-//     pub fn putq(&self, newq: &BTreeMap<String,String>;
-//
-//     pub fn getq(&self) -> BTreeMap<String,String>;
-//
-//     pub fn launch(&mut self, msg: &str) -> &T;
-// }
-
+mod fuzzererror;
+/// Trait for types that represent a [Fuzzer](https://en.wikipedia.org/wiki/Fuzz_testing)
+///
+/// Fuzzers must be able to send and recieve their synthesized content, provide information on
+/// its progress, and be initialized on command.
 pub trait Fuzzer {
+    /// Returns a Vector of Strings representing the work the fuzzer has done.
     fn get_stats(&self) -> Vec<String>;
+    /// Stores newq to disk, newq should represent a map of file names to file content.
     fn putq(&self, newq: &BTreeMap<String,String>);
+    /// Returns all of the files in the queue as a BTreeMap of file names to file content.
     fn getq(&self) -> BTreeMap<String,String>;
-    fn launch(&mut self, msg: &str);
+    /// Begins the fuzzing process. Takes a &str, which can be used as arguments to the fuzzer.
+    fn launch(&mut self, args: &str);
 }
 
-// pub trait Harness<T : Fuzzer + Send + Sync> {
-//     fn listen(&self, String);
-//     fn sendq(&self, &mut Request, &mut T) -> IronResult<Response>;
-//     fn recvq(&self, &mut Request, &mut T) -> IronResult<Response>;
-//     fn stats(&self, &mut Request, &mut T) -> IronResult<Response>;
-//     fn start(&self, &mut Request, &mut T) -> IronResult<Response>;
-// }
-
-/// The AFL struct maintains an AFLOpts 'opts' (see AFLOpts), and a vector of
-/// afl process children 'instances'
-pub struct AFL {
-    opts: AFLOpts,
-    instances: Vec<Child>,
-    pub test: String
-}
-
+/// AFL Options.
+///
+/// # Examples
+/// ```rust
+/// let aflopts = AFLOpts {
+///     afl_path: "/path/to/afl-fuzz".to_owned(),
+///     target_path: "/path/to/target".to_owned(),
+///     ..Default::default()
+/// }
+/// ```
 /// AFLOpts holds the AFL environment data, such as the path to the sync directory,
 /// whether AFL is currently running, and the scheme to use when creating fuzzers.
 #[derive(Clone)]
@@ -82,75 +57,93 @@ pub struct AFLOpts {
     pub target_path: String,
     pub whatsup: String,
     pub sync_dir: String,
-    pub testcases: String,
+    pub testcases: String, // Change to Option to handle pause
     pub scheme: String,
     pub instance_count: usize
 }
 
-// #[derive(Serialize, Deserialize)]
-// struct Stat {
-//     msg: Vec<String>
-// }
+impl Default for AFLOpts {
+    fn default() -> AFLOpts {
+        AFLOpts {
+            running: false,
+            afl_path: "./AFL/afl-fuzz".to_string(),
+            target_path: "./AFL/target".to_string(),
+            sync_dir: "./AFL/sync/".to_string(),
+            testcases: "./AFL/testcases/".to_string(),
+            whatsup: "./AFL/afl-whatsup".to_string(),
+            scheme: "fuzzer_".to_string(),
+            instance_count: num_cpus::get()
+        }
+    }
+}
+
+/// The AFL struct maintains an AFLOpts 'opts' (see AFLOpts), and a vector of
+/// afl process children 'instances'
+pub struct AFL {
+    opts: AFLOpts,
+    instances: Vec<Child>
+}
+
 impl AFL {
-    /// Create a new AFL object, requires a fully instantiated AFLOpts
+    /// Takes AFLOpts struct, returns AFL struct.
     pub fn new(opts: AFLOpts) -> AFL {
         AFL {
-            instances: Vec::new(),
-            opts: opts,
-            test: "Constructor".to_owned()
+            instances: Vec::with_capacity(opts.instance_count),
+            opts: opts
         }
     }
 
     /// Returns a copy of the current AFLOpts struct.
-    /// If you wish to change the current options, instead
-    /// create a new AFL object and provide the constructor
-    /// with get_opts()
+    ///
+    /// # Example
     /// ```rust
     /// // Example of increasing afl instance_count after launch
-    /// let mut opts = afl.get_opts();
-    /// opts.instance_count += 2;
-    /// let mut new_afl = afl::AFL::new(opts);
-    /// *afl = new_afl;
+    /// let mut opts = afl.get_opts();          // Get mutable copy of current opts
+    /// opts.instance_count += 2;               // Modify copy accordingly
+    /// let mut new_afl = afl::AFL::new(opts);  // Create new AFL instalce with opts
+    /// *afl = new_afl;                         //
     /// ```
     pub fn get_opts(&self) -> AFLOpts {
         self.opts.clone()
     }
 
     /// Unimplemented
-    // pub fn get_config(&mut self, argcsv: &str) -> *mut AFL {
-    //     let mut msg = Vec::with_capacity(argcsv.len());
+    #[allow(unused_variables,dead_code)]
+    pub fn get_config(&mut self, argcsv: &str) -> *mut AFL {
+        unimplemented!();
+    //     let mut args = Vec::with_capacity(argcsv.len());
     //     for arg in argcsv.split(",") {
     //         println!("{}", arg);
-    //         msg.push(arg);
+    //         args.push(arg);
     //     }
     //     self
-    // }
+    }
 
     /// "$ ./afl-fuzz -i testcase_dir -o sync_dir -S fuzzer03 [...other stuff...]"
-    /// Based on a 'msg', generates arguments for AFL
+    /// Based on 'args', generates arguments for AFL
     /// Should be moved out of afl.rs to the server
     /// Currently only provides a single profile, eventually
     /// there will be an 'add_profile
-    pub fn get_profile(&self, msg: &str) -> Vec<Vec< String>>{
-        let mut profile = Vec::new();
-        for it in 0..self.opts.instance_count {
-            profile.push(
-                vec!["-i".to_owned(),self.opts.testcases.to_owned(),"-o".to_owned(),
-                    self.opts.sync_dir.to_owned(), "-S".to_owned(),
-                    "fuzzer_".to_owned() + &it.to_string(),self.opts.target_path.to_owned()]
-                )
-        }
-        profile
+    #[allow(unused_variables,dead_code)]
+    pub fn get_profile(&self, args: &str) -> Vec<Vec< String>>{
+        unimplemented!();
+        // let mut profile = Vec::new();
+        // for it in 0..self.opts.instance_count {
+        //     profile.push(
+        //         vec!["-i".to_owned(),self.opts.testcases.to_owned(),"-o".to_owned(),
+        //             self.opts.sync_dir.to_owned(), "-S".to_owned(),
+        //             "fuzzer_".to_owned() + &it.to_string(),self.opts.target_path.to_owned()]
+        //         )
+        // }
+        // profile
     }
 }
 
 impl Fuzzer for AFL {
-
-    /// Spawns instance_count number of instances of afl-fuzz
-    /// Returns immutable reference to self.
-    fn launch(&mut self, msg: &str) {
+    /// Spawns instance_count number of afl fuzzers
+    fn launch(&mut self, args: &str) {
         if self.opts.running {return}
-        let profile = self.get_profile(&msg);
+        let profile = self.get_profile(&args);
         self.opts.running = true;
         for it in 0..self.opts.instance_count {
             self.instances.push(
@@ -165,27 +158,22 @@ impl Fuzzer for AFL {
     }
 
     /// Takes in a BTreeMap of String, String representing Filename, Filedata
-    /// Writes each file to each queue folder
-    fn putq(&self, newq: &BTreeMap<String,String>){
-        // let (tx, rx) = channel();
+    /// Writes the file to each queue folder
+    fn putq(&self, newq: &BTreeMap<String,String>) {
         let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
 
         match fs::read_dir(&self.opts.sync_dir) {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
-                    // let tx = tx.clone();
                     pool.execute(move|| {
-
                         let p = path.unwrap().path().to_str()
                         .unwrap().to_owned() + &"/queue/".to_owned();
+
                         if p.contains(".cur_input") {return};
 
-                        // When selecting files, a genetic trait may determine how many are thrown
-                        // away, to determine this species' impact on the environment
-                        // For example a '.skip(n)' iterator could reduce the impact by 'n'
                         for (key,value) in newq.iter(){
                             let mut f = File::create("".to_owned() + &p + &key).unwrap();
-                            f.write_all(&value.as_bytes());
+                            f.write_all(&value.as_bytes()).unwrap();
                         }
                     });
                 },
@@ -216,7 +204,7 @@ impl Fuzzer for AFL {
 
                                     let mut f = File::open(&p).unwrap();
                                     let mut s = String::new();
-                                    f.read_to_string(&mut s);
+                                    f.read_to_string(&mut s).unwrap();
 
                                     tx.send((PathBuf::from(p).file_name().unwrap().to_str()
                                             .unwrap().to_owned(),s)).unwrap();
@@ -231,7 +219,7 @@ impl Fuzzer for AFL {
         files
     }
 
-    /// Unimplemented
+
     fn get_stats(&self) -> Vec<String> {
         let (tx, rx) = channel();
 
@@ -264,21 +252,14 @@ impl Fuzzer for AFL {
     }
 }
 
-impl Default for AFLOpts {
-    fn default() -> AFLOpts {
-        AFLOpts {
-            running: false,
-            afl_path: "./AFL/afl-fuzz".to_string(),
-            target_path: "./AFL/target".to_string(),
-            sync_dir: "./AFL/sync/".to_string(),
-            testcases: "./AFL/testcases/".to_string(),
-            whatsup: "./AFL/afl-whatsup".to_string(),
-            scheme: "fuzzer_".to_string(),
-            instance_count: num_cpus::get()
-        }
-    }
-}
-
+// Unimplemented
+// pub trait Harness<T : Fuzzer + Send + Sync> {
+//     fn listen(&self, String);
+//     fn sendq(&self, &mut Request, &mut T) -> IronResult<Response>;
+//     fn recvq(&self, &mut Request, &mut T) -> IronResult<Response>;
+//     fn stats(&self, &mut Request, &mut T) -> IronResult<Response>;
+//     fn start(&self, &mut Request, &mut T) -> IronResult<Response>;
+// }
 
 
 // pub struct AFLHarness <T : Fuzzer + Send + Sync>{

@@ -1,9 +1,3 @@
-#![allow(unused_features)]
-#![allow(unused_variables)]
-#![feature(custom_derive, plugin, fs_walk, convert, scoped)]
-#![plugin(serde_macros)]
-
-// extern crate csv;
 extern crate iron;
 extern crate router;
 extern crate serde;
@@ -13,74 +7,26 @@ extern crate hyper;
 extern crate num_cpus;
 
 use self::hyper::Client;
-use self::hyper::client::{IntoUrl, Response};
+use self::hyper::client::IntoUrl;
 use std::str::FromStr;
-use serde::json::{self, Value};
+use serde::json;
 use std::collections::BTreeMap;
-use std::fs;
 use std::fs::File;
-use std::path::{Path, PathBuf};
 use std::io::prelude::*;
-use std::{io,error};
 use std::error::Error;
-use std::convert::From;
-use std::fmt;
 use std::thread;
-use std::sync::{Arc, Mutex};
+
+mod fuzzererror;
+use self::fuzzererror::FuzzerError;
 
 pub trait FuzzerView {
     fn get_stats(&self) -> String;
     fn passq(&self, &str);
 }
 
-
 pub trait Genetic {
     fn score_stats(&self) -> u64;
     fn get_spread_rate(&self) -> u32;
-}
-
-#[derive(Debug,Display)]
-pub enum FuzzerError {
-    IoError(io::Error),
-    Ser(serde::json::error::Error)
-}
-
-impl fmt::Display for FuzzerError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            FuzzerError::IoError(ref err) => write!(f, "IO error: {}", err),
-            FuzzerError::Ser(ref err) => write!(f, "Parse error: {}", err),
-        }
-    }
-}
-
-impl error::Error for FuzzerError {
-    fn description(&self) -> &str {
-        match *self {
-            FuzzerError::IoError(ref err) => err.description(),
-            FuzzerError::Ser(ref err) => error::Error::description(err),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            FuzzerError::IoError(ref err) => Some(err),
-            FuzzerError::Ser(ref err) => Some(err),
-        }
-    }
-}
-
-
-impl From<io::Error> for FuzzerError {
-    fn from(err: io::Error) -> FuzzerError {
-        FuzzerError::IoError(err)
-    }
-}
-
-impl From<serde::json::error::Error> for FuzzerError {
-    fn from(err: serde::json::error::Error) -> FuzzerError {
-        FuzzerError::Ser(err)
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,7 +46,6 @@ impl Genetic for AFLView {
         "paths_found".to_owned(),
         "max_depth".to_owned()];
 
-        let mut stats = String::with_capacity(512);
         let stats : Vec<String> = json::from_str(&self.get_stats()).unwrap();
         let mut score : u64 = 0;
 
@@ -128,7 +73,7 @@ impl Genetic for AFLView {
 
 impl FuzzerView for AFLView {
     fn get_stats(&self) -> String {
-        let mut client = Client::new();
+        let client = Client::new();
         let mut s = String::with_capacity(512);
 
         let url =  self.hostname.clone() + &"/stats";
@@ -139,12 +84,12 @@ impl FuzzerView for AFLView {
     }
 
     fn passq(&self, host: &str) {
-        let mut client = Client::new();
+        let client = Client::new();
         let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/passq";
         let url = url.into_url().unwrap();
-        let mut res = client.post(url).send().unwrap();
+        let mut res = client.post(url).body(host).send().unwrap();
         res.read_to_string(&mut s).unwrap();
     }
 
@@ -197,7 +142,7 @@ impl<T : FuzzerView
         let mut score = 0;
         for worker in self.workers.iter() {
 
-            for (name,view) in worker.iter() {
+            for view in worker.values() {
                 score += view.score_stats();
             }
         }

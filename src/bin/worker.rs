@@ -1,49 +1,36 @@
-#![allow(unused_features, unused_variables, unused_imports)]
-#![feature(custom_derive, plugin, fs_walk, convert)]
+#![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 extern crate csv;
-// extern crate rustc_serialize;
 extern crate iron;
 extern crate router;
 extern crate serde;
 extern crate url;
 extern crate num_cpus;
-//
-// use hyper::uri::RequestUri;
-// extern crate rustc_serialize;
 extern crate hyper;
 
 use hyper::Client;
 use std::io::Read;
-
 use std::collections::BTreeMap;
-// use rustc_serialize::json::{self, Json, Object, ToJson};
-
-
 use self::hyper::client::IntoUrl;
 use std::default::Default;
-use std::slice;
 use iron::prelude::*;
 use iron::status;
 use router::Router;
 use serde::json::{self, Value};
 use std::sync::{Arc, Mutex};
-use std::process::{Command, Child, Output, Stdio};
-use std::thread;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
+
 mod fuzzer;
 use fuzzer::{AFL,AFLOpts,Fuzzer};
 
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
-    let mut client = Client::new();
+    let client = Client::new();
     let mut payload = String::new();
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
     let queue = afl.getq();
 
-    for (_,value) in queue.iter() {
+    for value in queue.values() {
         let url =  payload.clone() + &"/passq";
         let url = url.into_url().unwrap();
         client.post(url).body(value).send().unwrap();
@@ -79,8 +66,8 @@ fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     let mut payload = String::new();
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
-    
-    let mut opts = afl.get_opts();
+
+    let opts = afl.get_opts();
     let mut new_afl = AFL::new(opts);
     new_afl.launch(&payload);
 

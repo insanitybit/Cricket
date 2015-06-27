@@ -1,10 +1,8 @@
-#![feature(custom_derive, plugin, fs_walk, convert)]
+#![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 extern crate serde;
 
-use std::collections::{BTreeMap, VecDeque};
-use std::path::{Path, PathBuf};
-use std::io::prelude::*;
+use std::collections::VecDeque;
 use std::fs;
 mod fuzzerview;
 use fuzzerview::{Network,AFLView,FuzzerView};
@@ -36,9 +34,11 @@ struct Score {
     individuals: Vec<u64>
 }
 
+
+#[allow(unused_variables, unused_assignments)]
 fn main() {
-    let mut population_size : u64= 5;
-    let mut lifespan : u32 = 900000;
+    let population_size : u64= 5;
+    let lifespan : u32 = 900000;
     let mut population = VecDeque::with_capacity(population_size as usize);
 
     fill_population(&mut population, &population_size);
@@ -46,8 +46,8 @@ fn main() {
     let mut cur_score = 0;
     let mut tot_score = 0;
     let mut avg_score = 0;
-    let mut high_score = 0;
-    let mut low_score = 0;
+    // let mut high_score = 0;
+    // let mut low_score = 0;
     let mut generation = 1;
 
     loop {
@@ -64,7 +64,7 @@ fn main() {
 
             real_network.fuzz(&lifespan, move |host:&str, fuzzview: &AFLView| {
                      let score_lck = score_lck.lock().unwrap();
-                     
+
                 });
 
             // After lifespan is 0
