@@ -7,7 +7,9 @@
 ///
 extern crate serde;
 extern crate hyper;
+extern crate threadpool;
 
+use std::sync::mpsc::channel;
 use self::hyper::Client;
 use self::hyper::client::IntoUrl;
 use std::str::FromStr;
@@ -28,7 +30,8 @@ use self::fuzzererror::*;
 pub trait FuzzerView {
     fn get_stats(&self) -> Result<String,FuzzerError>;
     fn passq(&self, &str) -> Result<(), FuzzerError>;
-
+    fn get_neighbors(&self) -> Vec<String>;
+    fn get_hostname(&self)  -> String;
 }
 
 /// Trait that defines a Genetic<T> type, one that can score itself, and provide a rate of
@@ -57,14 +60,40 @@ pub trait Genetic<T> {
 /// AFLView represents a 'view' of an AFL fuzzer across a network.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AFLView {
-    hostname: String,
-    neighbors: Vec<String>,
-    generation: u64,
-    mutation_rate: f64,
-    args: Vec<String>,
-    reproduction_rate: u32,
-    genes: String
+    pub hostname: String,
+    pub neighbors: Vec<String>,
+    pub generation: u64,
+    pub mutation_rate: f64,
+    pub args: Vec<String>,
+    pub reproduction_rate: u32,
+    pub genes: String
 }
+
+impl AFLView {
+    // fn new() {
+    //     AFLView {
+    //         hostname: String,
+    //         neighbors: Vec<String>,
+    //         generation: u64,
+    //         mutation_rate: f64,
+    //         args: Vec<String>,
+    //         reproduction_rate: u32,
+    //         genes: String
+    //     }
+    // }
+}
+
+// impl Default for AFLView {
+//     fn default() -> AFLView {
+//         AFLView {
+//             generation: 0,
+//             mutation_rate: 0.0,
+//             args: vec!["default"],
+//             reproduction_rate: 2,
+//             genes: ""
+//         }
+//     }
+// }
 
 impl FuzzerView for AFLView {
     /// Returns a String, representing the stats of the AFL instance behind this AFLView
@@ -92,6 +121,13 @@ impl FuzzerView for AFLView {
         Ok(())
     }
 
+
+    fn get_neighbors(&self) -> Vec<String> {
+        self.neighbors.clone()
+    }
+    fn get_hostname(&self)  -> String {
+        return self.hostname.clone();
+    }
 }
 
 impl<T:FuzzerView> Genetic<T> for AFLView {
@@ -144,9 +180,11 @@ impl<T:FuzzerView> Genetic<T> for AFLView {
     /// For example, AFLView can hold the genetic data of a non-AFLView type T. It can't express
     /// these attributes itself, but if another type T reproduces with the AFLView, the type T's
     /// child *will* be able to express those genes.
-    /// Possibly make this optional
+    /// Possibly make the ability to cross with other species optional, or hide behind Bridge
     fn reproduce_with(mate: T) -> T {
         unimplemented!();
+        let host = mate.get_hostname();
+
     }
 
 }
@@ -185,6 +223,28 @@ impl<T : FuzzerView
         }
     }
 
+    pub fn with_capacity(size: usize) -> Network<T> {
+        Network {
+            workers:Vec::with_capacity(size),
+            generation: 0,
+            mutation_rate: 500,
+            worker_count: 0
+        }
+    }
+
+    pub fn add_worker(&mut self, view: T) {
+        let hostname = view.get_hostname();
+        for worker in self.workers.iter() {
+            for key in worker.keys() {
+                if *key == hostname {
+                    return // provide result eventually
+                }
+            }
+        }
+        let mut map = BTreeMap::new();
+        map.insert(hostname,view);
+        self.workers.push(map);
+    }
     /// Loads a json representation of a Network from 'path'.
     /// Returns a FuzzerError if the file can not be opened, or if it is not valid json.
     pub fn load_network(path: String) -> Result<Network<T>,FuzzerError> {
@@ -200,9 +260,9 @@ impl<T : FuzzerView
     /// Writes a serialized json representation of a network to 'path'
     pub fn save_network(&self, path: &str) -> Result<(()),FuzzerError> {
         let net = json::to_value(self);
-        let jnet = &net.as_string().unwrap();
+        let jnet = &net.as_string();
         let mut f = try!(File::create(&path));
-        try!(f.write_all(jnet.as_bytes()));
+        try!(f.write_all(jnet.unwrap().as_bytes()));
         Ok(())
     }
 
@@ -223,28 +283,42 @@ impl<T : FuzzerView
     /// Takes a callback, which must return a value of PartialEq + Eq
     /// The lifespan is the total running time of this function
 
-    pub fn fuzz<F>(&self, lifespan: &u32) where
-        F: Fn(&str, &T) {
-        unimplemented!();
-        let mut lifespan = lifespan.clone() * self.worker_count as u32;
+    pub fn fuzz(&self, lifespan: &u32) {
+        // unimplemented!();
+        return;
 
-        while lifespan > 0 {
-            for worker in self.workers.iter() {
-                for (key,value) in worker.iter() {
-                    let reproduction_rate = value.get_reproduction_rate();
-                    let mut interval = lifespan / reproduction_rate;
-                    let mut counter = 0;
-                    // thread::scoped(move|| {
-                        while interval > counter {
-                            // value.reproduce_with(key);
-                            value.passq(key);
-                            thread::sleep_ms(interval);
-                            counter += 1;
-                        }
-                    // });
-                    lifespan -= interval;
-                }
+        let mut reproduction_intervals = Vec::with_capacity(self.worker_count);
+        let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
+
+        //
+        // calculate each worker's interval
+        //
+        for worker in self.workers.iter() {
+            for view in worker.values() {
+                reproduction_intervals.push(lifespan / view.get_reproduction_rate());
             }
         }
+
+        // Spawn a thread for every worker, threads spend most of their time asleep, only waking
+        // to pass their queues
+        for interval in reproduction_intervals {
+            let mut lifespan = lifespan.clone();
+
+            pool.execute(move || {
+                    while lifespan > 0 {
+                        for worker in self.workers.iter(){
+                            for (_,value) in worker.iter(){
+                                for neighbor in value.get_neighbors().iter() {
+                                    value.passq(neighbor);
+                                }
+                            }
+                        }
+                        lifespan -= interval;
+                        thread::sleep_ms(interval);
+                    }
+                });
+        }
+
+        let mut lifespan = lifespan.clone() * self.worker_count as u32;
     }
 }

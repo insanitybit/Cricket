@@ -22,14 +22,14 @@ use fuzzer::{AFL,AFLOpts,Fuzzer};
 
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     let client = Client::new();
-    let mut payload = String::new();
+    let mut payload = String::with_capacity(64); // Around how long my AFLArgs are
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
     let queue = afl.getq();
 
-    for value in queue.values() {
-        let url =  payload.clone() + &"/passq";
+    for value in queue.iter() {
+        let url =  payload.clone() + &"/recvq";
         let url = url.into_url().unwrap();
         client.post(url).body(value).send().unwrap();
     }
@@ -39,7 +39,7 @@ fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 
 fn recvq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("RECVQ");
-    let mut payload = String::new();
+    let mut payload = String::with_capacity(1024); // Reasonably sized file
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
@@ -62,7 +62,7 @@ fn stats(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 // Receive a message by POST and play it back.
 fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("START");
-    let mut payload = String::new();
+    let mut payload = String::with_capacity(64);
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 

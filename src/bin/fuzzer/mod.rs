@@ -17,6 +17,7 @@ use std::default::Default;
 use std::process::{Command, Child};
 
 mod fuzzererror;
+// use fuzzererror::FuzzerError;
 /// Trait for types that represent a [Fuzzer](https://en.wikipedia.org/wiki/Fuzz_testing)
 ///
 /// Fuzzers must be able to send and recieve their synthesized content, provide information on
@@ -27,9 +28,9 @@ pub trait Fuzzer {
     /// Stores newq to disk, newq should represent a map of file names to file content.
     fn putq(&self, newq: &BTreeMap<String,String>);
     /// Returns all of the files in the queue as a BTreeMap of file names to file content.
-    fn getq(&self) -> BTreeMap<String,String>;
+    fn getq(&self) -> Vec<String>;
     /// Begins the fuzzing process. Takes a &str, which can be used as arguments to the fuzzer.
-    fn launch(&mut self, args: &str);
+    fn launch(&mut self, args: &str) -> Result<(),fuzzererror::FuzzerError>;
 }
 
 /// AFL Options.
@@ -136,20 +137,20 @@ impl AFL {
 
 impl Fuzzer for AFL {
     /// Spawns instance_count number of afl fuzzers
-    fn launch(&mut self, args: &str) {
-        if self.opts.running {return}
+    fn launch(&mut self, args: &str) -> Result<(),fuzzererror::FuzzerError> {
+        if self.opts.running {return Err(fuzzererror::FuzzerError::AlreadyRunning)}
         let profile = self.get_profile(&args);
         self.opts.running = true;
         for it in 0..self.opts.instance_count {
             self.instances.push(
-                Command::new(self.opts.afl_path.clone())
+                try!(Command::new(self.opts.afl_path.clone())
                          .args(&profile[it])
                         //  .stdout(Stdio::piped())
-                         .spawn()
-                         .unwrap_or_else(|e| { panic!("failed to execute process: {}", e) })
+                         .spawn())
                 );
         }
         self.opts.running = true;
+        Ok(())
     }
 
     /// Takes in a BTreeMap of String, String representing Filename, Filedata
@@ -187,11 +188,11 @@ impl Fuzzer for AFL {
 
     /// Returns a BTreeMap of every file in every queue
     /// Keys are the file names, Values are the file contents
-    fn getq(&self) -> BTreeMap<String,String> {
+    fn getq(&self) -> Vec<String> {
         let (tx, rx) = channel();
         let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
 
-        let mut files = BTreeMap::new();
+        let mut files = Vec::new();
         match fs::read_dir(&self.opts.sync_dir) {
             Err(why) => println!("! {:?}", why.kind()),
             Ok(paths) => for path in paths {
@@ -208,7 +209,14 @@ impl Fuzzer for AFL {
 
                 match fs::read_dir(p) {
                        Err(why) => println!("! {:?}", why.kind()),
-                       Ok(paths) => for path in paths {
+                       Ok(paths) =>{
+                           // Get lower/ upper bound, assign to vector to reserve files vector
+                           let size = match paths.size_hint() {
+                               (l,None) =>  l,
+                               (_,Some(h))  => h
+                           };
+                           files.reserve(size);
+                           for path in paths {
                                let tx = tx.clone();
                                pool.execute(move|| {
                                    let p = match path {
@@ -226,31 +234,20 @@ impl Fuzzer for AFL {
                                         Ok(f)   => f,
                                         Err(_)  => return
                                     };
-                                    let mut s = String::new();
+                                    let mut s = String::with_capacity(1024); //reasonable file size
                                     match f.read_to_string(&mut s) {
                                         Ok(_)   => (),
                                         Err(_)  => return
                                     };
-                                    let name = PathBuf::from(p);
 
-                                    let name = match name.file_name() {
-                                        Some(n) => n,
-                                        None    => return
-                                    };
-
-                                    let name = match name.to_str() {
-                                        Some(n)  => n,
-                                        None        => return
-                                    };
-
-                                    tx.send((name.to_owned(),s)).unwrap();
+                                    tx.send(s).unwrap();
                                 });
-                       },
-                   }
-                },
-            }
-        for (a,b) in rx.iter(){
-            files.insert(a,b);
+                           }
+                       }
+                    }},
+                }
+        for r in rx.iter(){
+            files.push(r);
         }
         files
     }
@@ -283,8 +280,8 @@ impl Fuzzer for AFL {
                                 Ok(f) => f,
                                 Err(_)    => {tx.send("".to_owned()).unwrap();return}
                             };
-
-                            let mut stats = String::with_capacity(600);
+                            // stats file for AFL is about 500 characters
+                            let mut stats = String::with_capacity(512);
 
                             match f.read_to_string(&mut stats) {
                                 Ok(_) => tx.send(stats).unwrap(),

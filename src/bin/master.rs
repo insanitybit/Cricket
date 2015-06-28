@@ -38,7 +38,8 @@ struct Score {
 fn main() {
     let population_size : u64= 5;
     let lifespan : u32 = 900000;
-    let mut population = VecDeque::with_capacity(population_size as usize);
+    let mut population : VecDeque<Network<AFLView>>
+    = VecDeque::with_capacity(population_size as usize);
 
     fill_population(&mut population, &population_size);
 
@@ -49,41 +50,20 @@ fn main() {
     // let mut low_score = 0;
     let mut generation = 1;
 
-    loop {
-        for network in population.iter() {
-            let real_network = population.front().unwrap();
+    for network in population {
+        println!("{:?}",network);
 
-            // let score = Arc::new(Mutex::new(Score {
-            //     average: 0,
-            //     total: 0,
-            //     individuals: Vec::new()
-            // }));
+        network.fuzz(&100);
+        cur_score = network.score();
+        println!("Current network score: {}", cur_score );
+        tot_score += cur_score;
+        avg_score = tot_score / generation;
 
-            // let score_lck = score.clone();
-            //
-            // //
-            // real_network.fuzz(&lifespan, move |host:&str, fuzzview: &AFLView| {
-            //          let score_lck = score_lck.lock().unwrap();
-            //
-            //     });
+        generation += 1;
+        // population.
 
-            // After lifespan is 0
-            // scoring should be handled internally, or, a callback should be taken to
-            // execute every iteration
-            cur_score = real_network.score();
-            println!("Current network score: {}", cur_score );
-            tot_score += cur_score;
-            avg_score = tot_score / generation;
-
-            generation += 1;
-            // population.
-        }
         break;
     }
-
-    // loop continuously grabbing stats, analyzing stats
-    // Get stats repeatedly in intervals, average them before analyzing to avoid anomalous behavior
-    // Based on stats, generate queue of networks
-    // After analysis, generate interval, repeat process
+    println!("End");
 
 }
