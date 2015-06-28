@@ -1,3 +1,6 @@
+#![feature(custom_derive, plugin, fs_walk, convert)]
+#![plugin(serde_macros)]
+extern crate serde;
 /// This example shows a waterfall structure using a Network of AFLView
 /// These AFLViews will send each other queue data 40 times over the course of a day
 
@@ -6,7 +9,7 @@ use fuzzerview::{Network,AFLView,FuzzerView};
 
 fn main() {
 
-    let mut network : Network<AFLView> = Network::with_capacity(5);
+    let mut network : Network<AFLView> = Network::new();
 
     // Networks can automatically be loaded with load_network, but for demonstration purposes
     // I'm creating each worker from a list of host->neighbor pairs
@@ -17,7 +20,7 @@ fn main() {
                         ("http://localhost:3003".to_owned(),"http://localhost:3004".to_owned()),
                         ("http://localhost:3004".to_owned(),"http://localhost:3000".to_owned())];
 
-    for (host,neighbor) in hostnames.iter() {
+    for (host,neighbor) in hostnames {
         network.add_worker(
             AFLView {
                 hostname: host,
@@ -33,7 +36,7 @@ fn main() {
     let max_generations = 5;
     let lifetime = 86400000; // lifetime determines how long a generation lasts in ms
     while generation < max_generations {
-        network.fuzz(lifetime);
+        network.fuzz(&lifetime);
     }
 
 }
