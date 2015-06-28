@@ -37,14 +37,18 @@ pub trait FuzzerView {
 /// Trait that defines a Genetic<T> type, one that can score itself, and provide a rate of
 /// reproduction
 pub trait Genetic<T> {
-    /// Returns a u64 representation of its score - to be replaced with Score trait
-    fn score_stats(&self) -> Result<u64,FuzzerError>;
     /// Returns the number of milliseconds representing a rate of reproduction
     fn get_reproduction_rate(&self) -> u32;
     ///
     fn reproduce_with(mate: T) -> T;
 
     // mutate(&mut self);
+}
+
+pub trait Environment {
+    /// Returns a u64 representation of its score - to be replaced with Score trait
+    fn score_stats(&self,Option<String>) -> Result<u64,FuzzerError>;
+
 }
 
 /// AFLView
@@ -131,36 +135,6 @@ impl FuzzerView for AFLView {
 }
 
 impl<T:FuzzerView> Genetic<T> for AFLView {
-    /// Currently adds up the paths_total, paths_found, max_depth and returns it
-    /// See AFL official docs for details
-    fn score_stats(&self) -> Result<u64,FuzzerError> {
-        unimplemented!();
-        // let titles = vec![
-        // "paths_total".to_owned(),
-        // "paths_found".to_owned(),
-        // "max_depth".to_owned()];
-        //
-        // let stats = try!(&self.get_stats());
-        //
-        // let stats : Vec<String> = json::from_str(stats).unwrap();
-        // let mut score : u64 = 0;
-        //
-        // for stat in stats.iter() {
-        //     let stats : Vec<String> = stat.split("\n")
-        //     .map(|s| s.replace(" ", "").to_owned()).collect();
-        //
-        //     for stat in stats {
-        //         let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
-        //         if stat.len() != 2 {continue};
-        //         if titles.contains(&stat[0]) {
-        //             let s : Result<u64,_> = FromStr::from_str(&stat[1]);
-        //             score += s.unwrap();
-        //         }
-        //     }
-        // }
-        // score
-    }
-
     /// Returns the AFLView's reproduction rate
     fn get_reproduction_rate(&self) -> u32 {
         self.reproduction_rate
@@ -189,6 +163,84 @@ impl<T:FuzzerView> Genetic<T> for AFLView {
 
 }
 
+/// A helper struct to manage a recorded history
+// I can probably optimize this quite a lot by writing this bit myself but for now, Vecue
+#[derive(Serialize, Deserialize, Debug)]
+pub struct History  {
+    average_queue: Vec<u64>,
+    high_queue: Vec<u64>,
+    low_queue: Vec<u64>,
+    upper_bound: u64,
+    lower_bound: u64,
+    max_size: usize
+}
+
+impl History  {
+    fn new(size: usize) -> History  {
+        History  {
+            average_queue: Vec::with_capacity(size * 2),
+            high_queue: Vec::with_capacity(size),
+            low_queue: Vec::with_capacity(size),
+            upper_bound: 25,
+            lower_bound: 25,
+            max_size: size
+        }
+    }
+
+    fn get_average(&self) -> u64 {
+        if self.average_queue.len() == 0 {
+            0
+        } else {
+            let mut total : u64 = 0;
+            for item in self.average_queue.iter() {
+                total += *item;
+            }
+            total / self.average_queue.len() as u64
+        }
+    }
+
+    /// Takes a value and adds it to the end of the vector.
+    /// If the vector fills, this history is cleared.
+    fn push(&mut self, value: Option<u64>) {
+        if self.average_queue.len() >= self.max_size {
+            self.average_queue.clear();
+        }
+        if self.high_queue.len() >= self.max_size {
+            self.high_queue.clear();
+        }
+        if self.low_queue.len() >= self.max_size {
+            self.low_queue.clear();
+        }
+
+        let value = match value {
+            Some(v) => v,
+            None    => self.get_average()
+        };
+
+        let average = self.get_average();
+        let upper = ((100 * average) + (average * self.upper_bound)) / 100;
+        let lower = ((100 * average) - (average * self.lower_bound)) / 100;
+
+
+
+        if value > upper {
+            self.high_queue.push(value);
+        } else if value < lower {
+            self.low_queue.push(value);
+        }
+
+        self.average_queue.push(value);
+    }
+
+    fn get_upper(&self) -> u64 {
+        self.upper_bound.clone()
+    }
+    fn get_lower(&self) -> u64 {
+        self.lower_bound.clone()
+    }
+}
+
+
 /// Network
 ///
 /// # Examples
@@ -204,6 +256,7 @@ impl<T:FuzzerView> Genetic<T> for AFLView {
 pub struct Network<T : FuzzerView + serde::ser::Serialize
                      + serde::de::Deserialize + Genetic<T> + Sync> {
     workers:BTreeMap<String,T>,
+    history: History,
     worker_count: usize,
     generation: u64,
     mutation_rate: u64
@@ -218,6 +271,7 @@ impl<T : FuzzerView
         Network {
             workers:BTreeMap::new(),
             generation: 0,
+            history: History::new(100),
             mutation_rate: 500,
             worker_count: 0
         }
@@ -268,12 +322,13 @@ impl<T : FuzzerView
     pub fn get_worker_scores(&self) -> Vec<Option<u64>> {
         let mut scores : Vec<_> = Vec::with_capacity(self.worker_count);
         for view in self.workers.values() {
-            match view.score_stats() {
-                Ok(score) => scores.push(Some(score)),
-                Err(_)        => scores.push(None)
-            }
+            match view.get_stats() {
+                Ok(score) => self.score_stats(Some(score)),
+                Err(_)        => self.score_stats(None)
+            };
 
         }
+
         scores
     }
 
@@ -314,5 +369,40 @@ impl<T : FuzzerView
                     }
                 });
         }
+    }
+}
+
+impl<T : FuzzerView
++ serde::ser::Serialize
++ serde::de::Deserialize
++ Genetic<T> + Sync> Environment for Network<T> {
+    /// Currently adds up the paths_total, paths_found, max_depth and returns it
+    /// See AFL official docs for details
+    fn score_stats(&self, stat: Option<String>) -> Result<u64,FuzzerError> {
+        unimplemented!();
+        // let titles = vec![
+        // "paths_total".to_owned(),
+        // "paths_found".to_owned(),
+        // "max_depth".to_owned()];
+        //
+        // let stats = try!(&self.get_stats());
+        //
+        // let stats : Vec<String> = json::from_str(stats).unwrap();
+        // let mut score : u64 = 0;
+        //
+        // for stat in stats.iter() {
+        //     let stats : Vec<String> = stat.split("\n")
+        //     .map(|s| s.replace(" ", "").to_owned()).collect();
+        //
+        //     for stat in stats {
+        //         let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
+        //         if stat.len() != 2 {continue};
+        //         if titles.contains(&stat[0]) {
+        //             let s : Result<u64,_> = FromStr::from_str(&stat[1]);
+        //             score += s.unwrap();
+        //         }
+        //     }
+        // }
+        // score
     }
 }
