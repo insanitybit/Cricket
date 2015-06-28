@@ -203,7 +203,7 @@ impl<T:FuzzerView> Genetic<T> for AFLView {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Network<T : FuzzerView + serde::ser::Serialize
                      + serde::de::Deserialize + Genetic<T> + Sync> {
-    workers:Vec<BTreeMap<String,T>>,
+    workers:BTreeMap<String,T>,
     worker_count: usize,
     generation: u64,
     mutation_rate: u64
@@ -216,16 +216,7 @@ impl<T : FuzzerView
     /// Returns a new Network<T>
     pub fn new() -> Network<T> {
         Network {
-            workers:Vec::new(),
-            generation: 0,
-            mutation_rate: 500,
-            worker_count: 0
-        }
-    }
-
-    pub fn with_capacity(size: usize) -> Network<T> {
-        Network {
-            workers:Vec::with_capacity(size),
+            workers:BTreeMap::new(),
             generation: 0,
             mutation_rate: 500,
             worker_count: 0
@@ -234,17 +225,14 @@ impl<T : FuzzerView
 
     pub fn add_worker(&mut self, view: T) {
         let hostname = view.get_hostname();
-        for worker in self.workers.iter() {
-            for key in worker.keys() {
-                if *key == hostname {
-                    return // provide result eventually
-                }
+        for key in self.workers.keys() {
+            if *key == hostname {
+                return // provide result eventually
             }
         }
-        let mut map = BTreeMap::new();
-        map.insert(hostname,view);
-        self.workers.push(map);
+        self.workers.insert(hostname,view);
     }
+
     /// Loads a json representation of a Network from 'path'.
     /// Returns a FuzzerError if the file can not be opened, or if it is not valid json.
     pub fn load_network(path: String) -> Result<Network<T>,FuzzerError> {
@@ -270,19 +258,29 @@ impl<T : FuzzerView
     // Should be moved to Genetic<T> trait impl
     pub fn score(&self) -> u64 {
         let mut score = 0;
-        for worker in self.workers.iter() {
-
-            for view in worker.values() {
-                // score += view.score_stats();
-            }
+        for view in self.workers.values() {
+            // score += view.score_stats();
         }
         score
+    }
+
+    // Replace u64 with generic type that implements PartialEq,Eq
+    pub fn get_worker_scores(&self) -> Vec<Option<u64>> {
+        let mut scores : Vec<_> = Vec::with_capacity(self.worker_count);
+        for view in self.workers.values() {
+            match view.score_stats() {
+                Ok(score) => scores.push(Some(score)),
+                Err(_)        => scores.push(None)
+            }
+
+        }
+        scores
     }
 
     /// Commands remote Fuzzer instances to begin work
     /// Takes a callback, which must return a value of PartialEq + Eq
     /// The lifespan is the total running time of this function
-
+    // reimplement callback later, I actually like that idea
     pub fn fuzz(&self, lifespan: &u32) {
         // unimplemented!();
         return;
@@ -293,11 +291,11 @@ impl<T : FuzzerView
         //
         // calculate each worker's interval
         //
-        for worker in self.workers.iter() {
-            for view in worker.values() {
-                reproduction_intervals.push(lifespan / view.get_reproduction_rate());
-            }
+
+        for view in self.workers.values() {
+            reproduction_intervals.push(lifespan / view.get_reproduction_rate());
         }
+
 
         // Spawn a thread for every worker, threads spend most of their time asleep, only waking
         // to pass their queues
@@ -306,11 +304,9 @@ impl<T : FuzzerView
 
             pool.execute(move || {
                     while lifespan > 0 {
-                        for worker in self.workers.iter(){
-                            for (_,value) in worker.iter(){
-                                for neighbor in value.get_neighbors().iter() {
-                                    value.passq(neighbor);
-                                }
+                        for (_,value) in self.workers.iter(){
+                            for neighbor in value.get_neighbors().iter() {
+                                value.passq(neighbor);
                             }
                         }
                         lifespan -= interval;
@@ -318,7 +314,5 @@ impl<T : FuzzerView
                     }
                 });
         }
-
-        let mut lifespan = lifespan.clone() * self.worker_count as u32;
     }
 }
