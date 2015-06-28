@@ -255,7 +255,8 @@ impl Fuzzer for AFL {
         files
     }
 
-
+    /// Gets stats from every fuzzer instance, storing them into a vector.
+    /// If an error occurs, an empty string is inserted into the Vector
     fn get_stats(&self) -> Vec<String> {
         let (tx, rx) = channel();
 
@@ -267,26 +268,27 @@ impl Fuzzer for AFL {
                         pool.execute(move|| {
                             let p = match path {
                                 Ok(p) => p,
-                                Err(_)    => return
+                                Err(_)    => {tx.send("".to_owned()).unwrap();return}
                             };
 
                             let p = match p.path().to_str() {
                                 Some(p)   => p.to_owned() + &"/fuzzer_stats".to_owned(),
-                                None  => return
+                                None  => {tx.send("".to_owned()).unwrap();return}
                             };
                             if p.contains(".cur_input") {
+                                tx.send("".to_owned()).unwrap();
                                 return
                             }
                             let mut f = match File::open(&p) {
                                 Ok(f) => f,
-                                Err(_)    => return
+                                Err(_)    => {tx.send("".to_owned()).unwrap();return}
                             };
 
                             let mut stats = String::with_capacity(600);
 
                             match f.read_to_string(&mut stats) {
                                 Ok(_) => tx.send(stats).unwrap(),
-                                Err(_)    => return
+                                Err(_)    => {tx.send("".to_owned()).unwrap();return}
                             }
 
                         });
@@ -309,13 +311,10 @@ impl Fuzzer for AFL {
 //     fn stats(&self, &mut Request, &mut T) -> IronResult<Response>;
 //     fn start(&self, &mut Request, &mut T) -> IronResult<Response>;
 // }
-
-
-// pub struct AFLHarness <T : Fuzzer + Send + Sync>{
-//     server:
-    // router: Iron::Router,
-    // fuzzer: T,
-
+//
+//
+// pub struct AFLHarness <T : Fuzzer + Send + Sync> {
+//
 // }
 //
 // impl<T : Fuzzer + Send + Sync,

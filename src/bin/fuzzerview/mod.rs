@@ -28,15 +28,18 @@ use self::fuzzererror::*;
 pub trait FuzzerView {
     fn get_stats(&self) -> Result<String,FuzzerError>;
     fn passq(&self, &str) -> Result<(), FuzzerError>;
+
 }
 
-/// Trait that defines a Genetic type, one that can score itself, and provide a rate of
+/// Trait that defines a Genetic<T> type, one that can score itself, and provide a rate of
 /// reproduction
-pub trait Genetic {
+pub trait Genetic<T> {
     /// Returns a u64 representation of its score - to be replaced with Score trait
     fn score_stats(&self) -> Result<u64,FuzzerError>;
     /// Returns the number of milliseconds representing a rate of reproduction
     fn get_reproduction_rate(&self) -> u32;
+    ///
+    fn reproduce_with(mate: T) -> T;
 
     // mutate(&mut self);
 }
@@ -52,14 +55,15 @@ pub trait Genetic {
 /// }
 /// ```
 /// AFLView represents a 'view' of an AFL fuzzer across a network.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AFLView {
     hostname: String,
     neighbors: Vec<String>,
     generation: u64,
     mutation_rate: f64,
     args: Vec<String>,
-    reproduction_rate: u32
+    reproduction_rate: u32,
+    genes: String
 }
 
 impl FuzzerView for AFLView {
@@ -72,7 +76,7 @@ impl FuzzerView for AFLView {
         let url = url.into_url().unwrap();
 
         let mut res = try!(client.get(url).send());
-        res.read_to_string(&mut s).unwrap();
+        try!(res.read_to_string(&mut s));
         Ok(s)
     }
 
@@ -90,7 +94,7 @@ impl FuzzerView for AFLView {
 
 }
 
-impl Genetic for AFLView {
+impl<T:FuzzerView> Genetic<T> for AFLView {
     /// Currently adds up the paths_total, paths_found, max_depth and returns it
     /// See AFL official docs for details
     fn score_stats(&self) -> Result<u64,FuzzerError> {
@@ -125,6 +129,25 @@ impl Genetic for AFLView {
     fn get_reproduction_rate(&self) -> u32 {
         self.reproduction_rate
     }
+    /// Takes in a type T where T represents some Fuzzer. First, we send a json representation
+    /// of our genetic schema to T : a struct filled with None. T will respond with a modified
+    /// version that has a schema with all of the genetic information of T as well as any
+    /// additional genes unique to the FuzzerView.
+    ///
+    /// So, if this FuzzerView has the genes:
+    /// "a,b"
+    /// and our mate, T has:
+    /// 'b,c'
+    ///  T will return 'a,b,c' with a modified genetic value of 'b' and 'c'
+
+    /// This allows for cross-speciation where only one species genes are ever expressed at a time.
+    /// For example, AFLView can hold the genetic data of a non-AFLView type T. It can't express
+    /// these attributes itself, but if another type T reproduces with the AFLView, the type T's
+    /// child *will* be able to express those genes.
+    /// Possibly make this optional
+    fn reproduce_with(mate: T) -> T {
+        unimplemented!();
+    }
 
 }
 
@@ -139,9 +162,9 @@ impl Genetic for AFLView {
 /// }
 /// ```
 /// A Network represents a network of FuzzerViews using a graph-like structure.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Network<T : FuzzerView + serde::ser::Serialize
-                     + serde::de::Deserialize + Genetic + Sync> {
+                     + serde::de::Deserialize + Genetic<T> + Sync> {
     workers:Vec<BTreeMap<String,T>>,
     worker_count: usize,
     generation: u64,
@@ -151,7 +174,7 @@ pub struct Network<T : FuzzerView + serde::ser::Serialize
 impl<T : FuzzerView
 + serde::ser::Serialize
 + serde::de::Deserialize
-+ Genetic + Sync> Network<T> {
++ Genetic<T> + Sync> Network<T> {
     /// Returns a new Network<T>
     pub fn new() -> Network<T> {
         Network {
@@ -184,7 +207,7 @@ impl<T : FuzzerView
     }
 
     /// The network scores itself by adding the score of every Fuzzer it monitors.
-    // Should be moved to Genetic trait impl
+    // Should be moved to Genetic<T> trait impl
     pub fn score(&self) -> u64 {
         let mut score = 0;
         for worker in self.workers.iter() {
@@ -198,30 +221,28 @@ impl<T : FuzzerView
 
     /// Commands remote Fuzzer instances to begin work
     /// Takes a callback, which must return a value of PartialEq + Eq
-    /// The callback acts as a fitness function
-    pub fn fuzz<F>(&self, lifespan: &u32, callback: F) where
+    /// The lifespan is the total running time of this function
+
+    pub fn fuzz<F>(&self, lifespan: &u32) where
         F: Fn(&str, &T) {
         unimplemented!();
-        // let mut intervals : Vec<u64> = Vec::with_capacity(self.worker_count);
-        // 15 minutes
-        // let pool = threadpool::ScopedPool::new(num_cpus::get() as u32);
-        let mut lifespan = lifespan.clone();
-        // let interval = lifespan / 5; // Every 3 minutes
+        let mut lifespan = lifespan.clone() * self.worker_count as u32;
 
         while lifespan > 0 {
             for worker in self.workers.iter() {
                 for (key,value) in worker.iter() {
                     let reproduction_rate = value.get_reproduction_rate();
                     let mut interval = lifespan / reproduction_rate;
+                    let mut counter = 0;
                     // thread::scoped(move|| {
-                        while interval > 0 {
+                        while interval > counter {
+                            // value.reproduce_with(key);
                             value.passq(key);
                             thread::sleep_ms(interval);
-                            interval -= reproduction_rate;
+                            counter += 1;
                         }
                     // });
                     lifespan -= interval;
-                    callback(&key, &value);
                 }
             }
         }

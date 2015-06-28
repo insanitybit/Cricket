@@ -1,5 +1,6 @@
 extern crate url;
 extern crate serde;
+extern crate hyper;
 
 use std::io::prelude::*;
 use std::{io,error};
@@ -12,7 +13,8 @@ use std::fmt;
 pub enum FuzzerError {
     IoError(io::Error),
     Ser(serde::json::error::Error),
-    UrlError(url::parser::ParseError)
+    HyperError(hyper::error::Error)
+    // ParserError(url::parser::ParseError)
 }
 
 impl fmt::Display for FuzzerError {
@@ -20,7 +22,8 @@ impl fmt::Display for FuzzerError {
         match *self {
             FuzzerError::IoError(ref err) => write!(f, "IO error: {}", err),
             FuzzerError::Ser(ref err) => write!(f, "Parse error: {}", err),
-            FuzzerError::UrlError(ref err) => write!(f, "URL error: {}", err),
+            FuzzerError::HyperError(ref err) => write!(f, "Hyper error: {}", err),
+            // FuzzerError::ParserError(ref err) => write!(f, "URL error: {}", err),
         }
     }
 }
@@ -30,7 +33,8 @@ impl error::Error for FuzzerError {
         match *self {
             FuzzerError::IoError(ref err) => err.description(),
             FuzzerError::Ser(ref err) => error::Error::description(err),
-            FuzzerError::UrlError(ref err) => error::Error::description(err),
+            FuzzerError::HyperError(ref err)    => err.description(),
+            // FuzzerError::ParserError(ref err) => error::Error::description(err),
         }
     }
 
@@ -38,7 +42,8 @@ impl error::Error for FuzzerError {
         match *self {
             FuzzerError::IoError(ref err) => Some(err),
             FuzzerError::Ser(ref err) => Some(err),
-            FuzzerError::UrlError(ref err) => Some(err),
+            FuzzerError::HyperError(ref err) => Some(err),
+            // FuzzerError::ParserError(ref err) => Some(err),
         }
     }
 }
@@ -55,8 +60,14 @@ impl From<serde::json::error::Error> for FuzzerError {
     }
 }
 
-impl From<url::parser::ParseError> for FuzzerError {
-    fn from(err: url::parser::ParseError) -> FuzzerError {
-        FuzzerError::UrlError(err)
+impl From<hyper::error::Error> for FuzzerError {
+    fn from(err: hyper::error::Error) -> FuzzerError {
+        FuzzerError::HyperError(err)
     }
 }
+
+// impl From<url::parser::ParseError> for FuzzerError {
+//     fn from(err: url::parser::ParseError) -> FuzzerError {
+//         FuzzerError::ParserError(err)
+//     }
+// }

@@ -34,7 +34,6 @@ struct Score {
     individuals: Vec<u64>
 }
 
-
 #[allow(unused_variables, unused_assignments)]
 fn main() {
     let population_size : u64= 5;
@@ -54,18 +53,19 @@ fn main() {
         for network in population.iter() {
             let real_network = population.front().unwrap();
 
-            let score = Arc::new(Mutex::new(Score {
-                average: 0,
-                total: 0,
-                individuals: Vec::new()
-            }));
+            // let score = Arc::new(Mutex::new(Score {
+            //     average: 0,
+            //     total: 0,
+            //     individuals: Vec::new()
+            // }));
 
-            let score_lck = score.clone();
-
-            real_network.fuzz(&lifespan, move |host:&str, fuzzview: &AFLView| {
-                     let score_lck = score_lck.lock().unwrap();
-
-                });
+            // let score_lck = score.clone();
+            //
+            // //
+            // real_network.fuzz(&lifespan, move |host:&str, fuzzview: &AFLView| {
+            //          let score_lck = score_lck.lock().unwrap();
+            //
+            //     });
 
             // After lifespan is 0
             // scoring should be handled internally, or, a callback should be taken to
@@ -78,6 +78,7 @@ fn main() {
             generation += 1;
             // population.
         }
+        break;
     }
 
     // loop continuously grabbing stats, analyzing stats
