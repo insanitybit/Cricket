@@ -28,7 +28,7 @@ use self::fuzzererror::*;
 ///
 /// FuzzerView
 pub trait FuzzerView {
-    fn get_stats(&self) -> Result<String,FuzzerError>;
+    fn get_stats(&self) -> Result<Vec<String>,FuzzerError>;
     fn passq(&self, &str) -> Result<(), FuzzerError>;
     fn get_neighbors(&self) -> Vec<String>;
     fn get_hostname(&self)  -> String;
@@ -36,20 +36,15 @@ pub trait FuzzerView {
 
 /// Trait that defines a Genetic<T> type, one that can score itself, and provide a rate of
 /// reproduction
-pub trait Genetic<T> {
+pub trait Genetic<T : Genetic<T> + FuzzerView> {
     /// Returns the number of milliseconds representing a rate of reproduction
     fn get_reproduction_rate(&self) -> u32;
     ///
-    fn reproduce_with(mate: T) -> T;
+    fn reproduce_with(&self, mate: &T) -> T;
 
     // mutate(&mut self);
 }
 
-pub trait Environment {
-    /// Returns a u64 representation of its score - to be replaced with Score trait
-    fn score_stats(&self,Option<String>) -> Result<u64,FuzzerError>;
-
-}
 
 /// AFLView
 ///
@@ -101,7 +96,7 @@ impl AFLView {
 
 impl FuzzerView for AFLView {
     /// Returns a String, representing the stats of the AFL instance behind this AFLView
-    fn get_stats(&self) -> Result<String, FuzzerError> {
+    fn get_stats(&self) -> Result<Vec<String>, FuzzerError> {
         let client = Client::new();
         let mut s = String::with_capacity(512);
 
@@ -110,6 +105,7 @@ impl FuzzerView for AFLView {
 
         let mut res = try!(client.get(url).send());
         try!(res.read_to_string(&mut s));
+        let s : Vec<String> = try!(json::from_str(&s));
         Ok(s)
     }
 
@@ -134,7 +130,7 @@ impl FuzzerView for AFLView {
     }
 }
 
-impl<T:FuzzerView> Genetic<T> for AFLView {
+impl<T : Genetic<T> + FuzzerView> Genetic<T> for AFLView {
     /// Returns the AFLView's reproduction rate
     fn get_reproduction_rate(&self) -> u32 {
         self.reproduction_rate
@@ -155,7 +151,7 @@ impl<T:FuzzerView> Genetic<T> for AFLView {
     /// these attributes itself, but if another type T reproduces with the AFLView, the type T's
     /// child *will* be able to express those genes.
     /// Possibly make the ability to cross with other species optional, or hide behind Bridge
-    fn reproduce_with(mate: T) -> T {
+    fn reproduce_with(&self, mate: &T) -> T {
         unimplemented!();
         let host = mate.get_hostname();
 
@@ -176,7 +172,7 @@ pub struct History  {
 }
 
 impl History  {
-    fn new(size: usize) -> History  {
+    pub fn new(size: usize) -> History  {
         History  {
             average_queue: Vec::with_capacity(size * 2),
             high_queue: Vec::with_capacity(size),
@@ -187,7 +183,7 @@ impl History  {
         }
     }
 
-    fn get_average(&self) -> u64 {
+    pub fn get_average(&self) -> u64 {
         if self.average_queue.len() == 0 {
             0
         } else {
@@ -201,7 +197,7 @@ impl History  {
 
     /// Takes a value and adds it to the end of the vector.
     /// If the vector fills, this history is cleared.
-    fn push(&mut self, value: Option<u64>) {
+    pub fn push(&mut self, value: Option<u64>) {
         if self.average_queue.len() >= self.max_size {
             self.average_queue.clear();
         }
@@ -232,10 +228,10 @@ impl History  {
         self.average_queue.push(value);
     }
 
-    fn get_upper(&self) -> u64 {
+    pub fn get_upper(&self) -> u64 {
         self.upper_bound.clone()
     }
-    fn get_lower(&self) -> u64 {
+    pub fn get_lower(&self) -> u64 {
         self.lower_bound.clone()
     }
 }
@@ -262,10 +258,10 @@ pub struct Network<T : FuzzerView + serde::ser::Serialize
     mutation_rate: u64
 }
 
-impl<T : FuzzerView
+impl<T : Genetic<T>  + FuzzerView
 + serde::ser::Serialize
 + serde::de::Deserialize
-+ Genetic<T> + Sync> Network<T> {
++ Sync> Network<T> {
     /// Returns a new Network<T>
     pub fn new() -> Network<T> {
         Network {
@@ -275,6 +271,62 @@ impl<T : FuzzerView
             mutation_rate: 500,
             worker_count: 0
         }
+    }
+
+    /// Parents are selected for breeding based on their stats
+    /// Children are created by Genetic Fuzzer, returned to us
+    /// We select parents to die and children to replace them
+    fn selection(&self, parents: &BTreeMap<T, u64>)
+    where T : Genetic<T> + FuzzerView               {
+
+        for (parent,_) in parents.into_iter() {
+            // alpha = parent;
+            parent
+        };
+
+        let mut cur_score = &0;
+
+        for (parent, score) in parents.into_iter() {
+            if score > cur_score {
+                alpha = parent;
+                cur_score = score;
+            }
+        }
+
+        for (key,_) in parents.into_iter() {
+            key.reproduce_with(alpha);
+        }
+    }
+
+
+    /// Currently adds up the paths_total, paths_found, max_depth and returns it
+    /// See AFL official docs for details
+    fn score_stats(&self, stat: Option<Vec<String>>) -> u64 {
+        unimplemented!();
+        // let titles = vec![
+        // "paths_total".to_owned(),
+        // "paths_found".to_owned(),
+        // "max_depth".to_owned()];
+        //
+        // let stats = try!(&self.get_stats());
+        //
+        // let stats : Vec<String> = json::from_str(stats).unwrap();
+        // let mut score : u64 = 0;
+        //
+        // for stat in stats.iter() {
+        //     let stats : Vec<String> = stat.split("\n")
+        //     .map(|s| s.replace(" ", "").to_owned()).collect();
+        //
+        //     for stat in stats {
+        //         let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
+        //         if stat.len() != 2 {continue};
+        //         if titles.contains(&stat[0]) {
+        //             let s : Result<u64,_> = FromStr::from_str(&stat[1]);
+        //             score += s.unwrap();
+        //         }
+        //     }
+        // }
+        // score
     }
 
     pub fn add_worker(&mut self, view: T) {
@@ -322,13 +374,12 @@ impl<T : FuzzerView
     pub fn get_worker_scores(&self) -> Vec<Option<u64>> {
         let mut scores : Vec<_> = Vec::with_capacity(self.worker_count);
         for view in self.workers.values() {
-            match view.get_stats() {
+            let score = match view.get_stats() {
                 Ok(score) => self.score_stats(Some(score)),
                 Err(_)        => self.score_stats(None)
             };
-
+            scores.push(Some(score));
         }
-
         scores
     }
 
@@ -369,40 +420,5 @@ impl<T : FuzzerView
                     }
                 });
         }
-    }
-}
-
-impl<T : FuzzerView
-+ serde::ser::Serialize
-+ serde::de::Deserialize
-+ Genetic<T> + Sync> Environment for Network<T> {
-    /// Currently adds up the paths_total, paths_found, max_depth and returns it
-    /// See AFL official docs for details
-    fn score_stats(&self, stat: Option<String>) -> Result<u64,FuzzerError> {
-        unimplemented!();
-        // let titles = vec![
-        // "paths_total".to_owned(),
-        // "paths_found".to_owned(),
-        // "max_depth".to_owned()];
-        //
-        // let stats = try!(&self.get_stats());
-        //
-        // let stats : Vec<String> = json::from_str(stats).unwrap();
-        // let mut score : u64 = 0;
-        //
-        // for stat in stats.iter() {
-        //     let stats : Vec<String> = stat.split("\n")
-        //     .map(|s| s.replace(" ", "").to_owned()).collect();
-        //
-        //     for stat in stats {
-        //         let stat : Vec<String> = stat.split(":").map(|s| s.to_owned()).collect();
-        //         if stat.len() != 2 {continue};
-        //         if titles.contains(&stat[0]) {
-        //             let s : Result<u64,_> = FromStr::from_str(&stat[1]);
-        //             score += s.unwrap();
-        //         }
-        //     }
-        // }
-        // score
     }
 }
