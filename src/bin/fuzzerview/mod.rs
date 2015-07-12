@@ -330,7 +330,7 @@ impl Network {
 
     pub fn stop(&self) {
         for view in self.workers.values() {
-            // view.stop();
+            view.stop();
         }
     }
 
@@ -338,6 +338,7 @@ impl Network {
     /// Children are created by Genetic Fuzzer, returned to us
     /// We select parents to die and children to replace them
     fn selection(&self, parents: &BTreeMap<Box<FuzzerView>, u64>) {
+        unimplemented!();
         //
         // for (parent,_) in parents.into_iter() {
         //     // alpha = parent;
@@ -412,6 +413,7 @@ impl Network {
 
     /// Writes a serialized json representation of a network to 'path'
     pub fn save_network(&self, path: &str) -> Result<(()),FuzzerError> {
+        unimplemented!();
         // let net = json::to_value(self);
         // let jnet = &net.as_string();
         // let mut f = try!(File::create(&path));
@@ -429,7 +431,8 @@ impl Network {
         score
     }
 
-    // Replace u64 with generic type that implements PartialEq,Eq
+    /// Returns a vector of optional worker scores. Scores are None when the worker could not
+    /// be reached
     pub fn get_worker_scores(&self) -> Vec<Option<u64>> {
         let mut scores : Vec<_> = Vec::with_capacity(self.worker_count);
         for view in self.workers.values() {
@@ -451,9 +454,7 @@ impl Network {
         let mut reproduction_intervals = Vec::with_capacity(self.worker_count);
         let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
 
-        //
         // calculate each worker's interval
-        //
         for view in self.workers.values() {
             reproduction_intervals.push(lifespan / view.get_pass_rate());
         }
