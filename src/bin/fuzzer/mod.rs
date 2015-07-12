@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::default::Default;
-use std::process::{Command, Child};
+use std::process::{Command, Child, Stdio};
 
 mod fuzzererror;
 // use fuzzererror::FuzzerError;
@@ -31,6 +31,8 @@ pub trait Fuzzer {
     fn getq(&self) -> Vec<String>;
     /// Begins the fuzzing process. Takes a &str, which can be used as arguments to the fuzzer.
     fn launch(&mut self, args: &str) -> Result<(),fuzzererror::FuzzerError>;
+    /// Kills all fuzzers
+    fn stop(&mut self);
 }
 
 /// AFL Options.
@@ -122,16 +124,22 @@ impl AFL {
     /// there will be an 'add_profile
     #[allow(unused_variables,dead_code)]
     pub fn get_profile(&self, args: &str) -> Vec<Vec< String>>{
-        unimplemented!();
-        // let mut profile = Vec::new();
-        // for it in 0..self.opts.instance_count {
-        //     profile.push(
-        //         vec!["-i".to_owned(),self.opts.testcases.to_owned(),"-o".to_owned(),
-        //             self.opts.sync_dir.to_owned(), "-S".to_owned(),
-        //             "fuzzer_".to_owned() + &it.to_string(),self.opts.target_path.to_owned()]
-        //         )
-        // }
-        // profile
+        // unimplemented!();
+        let mut profile = Vec::with_capacity(self.opts.instance_count);
+
+        profile.push(
+            vec!["-i".to_owned(),self.opts.testcases.to_owned(),"-o".to_owned(),
+                self.opts.sync_dir.to_owned(), "-M".to_owned(),
+                "fuzzer_".to_owned() + &"0".to_string(),self.opts.target_path.to_owned()]
+            );
+        for it in 1..self.opts.instance_count {
+            profile.push(
+                vec!["-i".to_owned(),self.opts.testcases.to_owned(),"-o".to_owned(),
+                    self.opts.sync_dir.to_owned(), "-S".to_owned(),
+                    "fuzzer_".to_owned() + &it.to_string(),self.opts.target_path.to_owned()]
+                )
+        }
+        profile
     }
 }
 
@@ -145,12 +153,19 @@ impl Fuzzer for AFL {
             self.instances.push(
                 try!(Command::new(self.opts.afl_path.clone())
                          .args(&profile[it])
-                        //  .stdout(Stdio::piped())
+                         .stdout(Stdio::piped())
                          .spawn())
                 );
         }
         self.opts.running = true;
         Ok(())
+    }
+
+    /// Stops any running AFL processes
+    fn stop(&mut self) {
+        for worker in self.instances.iter_mut() {
+            worker.kill();
+        }
     }
 
     /// Takes in a BTreeMap of String, String representing Filename, Filedata

@@ -1,4 +1,4 @@
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin,lookup_host)]
 #![plugin(serde_macros)]
 
 extern crate iron;
@@ -6,6 +6,7 @@ extern crate router;
 extern crate serde;
 extern crate hyper;
 
+use std::net;
 use hyper::Client;
 use self::hyper::client::IntoUrl;
 use iron::status;
@@ -21,6 +22,7 @@ mod fuzzer;
 use fuzzer::{AFL,AFLOpts,Fuzzer};
 
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
+    println!("SENDQ");
     let client = Client::new();
     let mut payload = String::with_capacity(64); // Around how long my AFLArgs are
     request.body.read_to_string(&mut payload)
@@ -53,9 +55,11 @@ fn recvq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
+/// Should send back json encoded array of stats files
 fn stats(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("STATS");
     let stats = afl.get_stats();
+    println!("{:#?}",stats);
     Ok(Response::with(json::to_string(&stats).unwrap()))
 }
 //
@@ -74,6 +78,13 @@ fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     Ok(Response::with(status::Ok))
 }
 
+/// Ends the fuzzing process
+fn stop(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
+    println!("STOP");
+    afl.stop();
+    Ok(Response::with("Stopped"))
+}
+
 fn main() {
     let afl = Arc::new(Mutex::new(
         AFL::new(
@@ -86,6 +97,7 @@ fn main() {
     let afl_stats = afl.clone();
     let afl_passq = afl.clone();
     let afl_recvq = afl.clone();
+    let afl_stop = afl.clone();
 
     let mut router = Router::new();
 
@@ -93,7 +105,9 @@ fn main() {
     router.get("/stats", move |r: &mut Request| stats(r, &mut afl_stats.lock().unwrap()));
     router.post("/sendq", move |r: &mut Request| sendq(r, &mut afl_passq.lock().unwrap()));
     router.post("/recvq", move |r: &mut Request| recvq(r, &mut afl_recvq.lock().unwrap()));
+    router.get("/stop", move |r: &mut Request| recvq(r, &mut afl_stop.lock().unwrap()));
 
-    Iron::new(router).http("localhost:3000").unwrap();
+    println!("Server up");
+    Iron::new(router).http("172.31.15.165:80").unwrap();
 
 }

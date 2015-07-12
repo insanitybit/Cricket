@@ -3,7 +3,7 @@
 extern crate serde;
 
 mod fuzzerview;
-use fuzzerview::{Network,AFLView,FuzzerView};
+use fuzzerview::{Network,AFLView,FuzzerView,History};
 use std::sync::{Arc,Mutex};
 use std::collections::VecDeque;
 use std::fs;

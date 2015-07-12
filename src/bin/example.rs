@@ -18,8 +18,11 @@ fn main() {
     // Because Network's and FuzzerView's are Serializable they can be loaded from disk or sent
     // across a network. However, for the purposes of demonstration, we're going to just construct
     // it manually.
-
-    let mut network : Network<AFLView> = Network::new();
+    println!("STABLE");
+    let client = Client::new();
+    let res = client.get("ec2-54-175-81-211.compute-1.amazonaws.com:3000/stats".to_owned()).send();
+    println!("{:#?}", res);
+    // let mut network : Network<AFLView> = Network::new();
 
     // This is a json representation of the network being built
     // {
@@ -69,30 +72,30 @@ fn main() {
     //    }
     // }
 
-    let hostnames = vec![("http://localhost:3000".to_owned(),"http://localhost:3001".to_owned()),
-                        ("http://localhost:3001".to_owned(),"http://localhost:3002".to_owned()),
-                        ("http://localhost:3002".to_owned(),"http://localhost:3000".to_owned())];
-
-    for (host,neighbor) in hostnames {
-        network.add_worker(
-            AFLView {
-                hostname: host,
-                neighbors: vec![neighbor],
-                generation: 0,
-                mutation_rate: 0.0,
-                args: vec!["default".to_owned()],
-                reproduction_rate: 40,
-                genes: "".to_owned()
-            });
-    }
-
-    println!("{:?}",serde::json::value::to_value(&network));
-
-    let mut generation = 0;
-    let max_generations = 5;
-    let lifetime = 86400000; // lifetime determines how long a generation lasts in ms
-    while generation < max_generations {
-        network.fuzz(&lifetime);
-    }
+    // let hostnames = vec![("ec2-54-175-81-211.compute-1.amazonaws.com:3000".to_owned(),"http://localhost:3001".to_owned()),
+    //                     ("http://localhost:3001".to_owned(),"http://localhost:3002".to_owned()),
+    //                     ("http://localhost:3002".to_owned(),"http://localhost:3000".to_owned())];
+    //
+    // for (host,neighbor) in hostnames {
+    //     network.add_worker(
+    //         AFLView {
+    //             hostname: host,
+    //             neighbors: vec![neighbor],
+    //             generation: 0,
+    //             mutation_rate: 0.0,
+    //             args: vec!["default".to_owned()],
+    //             reproduction_rate: 40,
+    //             genes: "".to_owned()
+    //         });
+    // }
+    //
+    // println!("{:?}",serde::json::value::to_value(&network));
+    //
+    // let mut generation = 0;
+    // let max_generations = 5;
+    // let lifetime = 86400000; // lifetime determines how long a generation lasts in ms
+    // while generation < max_generations {
+    //     network.fuzz(&lifetime);
+    // }
 
 }
