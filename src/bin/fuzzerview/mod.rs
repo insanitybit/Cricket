@@ -280,7 +280,7 @@ impl History  {
 
         let rep = match serde::json::to_string(&self) {
             Ok(r) => r,
-            Err(e)    => panic!("couldn't serialize self {}",e),            
+            Err(e)    => panic!("couldn't serialize self {}",e),
         };
         // println!("{:#?}",rep);
         // let rep = match rep.as_string() {
@@ -432,13 +432,13 @@ impl Network {
     // Replace u64 with generic type that implements PartialEq,Eq
     pub fn get_worker_scores(&self) -> Vec<Option<u64>> {
         let mut scores : Vec<_> = Vec::with_capacity(self.worker_count);
-        // for view in self.workers.values() {
-        //     let score = match view.get_stats() {
-        //         Ok(score) => self.score_stats(Some(score)),
-        //         Err(_)        => self.score_stats(None)
-        //     };
-        //     scores.push(Some(score));
-        // }
+        for view in self.workers.values() {
+            let score = match view.get_stats() {
+                Ok(score) => self.score_stats(Some(score)),
+                Err(_)        => self.score_stats(None)
+            };
+            scores.push(Some(score));
+        }
         scores
     }
 
@@ -448,36 +448,34 @@ impl Network {
     /// reimplement callback later, I actually like that idea
     pub fn fuzz(&self, lifespan: &u32) {
 
-        // let mut reproduction_intervals = Vec::with_capacity(self.worker_count);
-        // let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
+        let mut reproduction_intervals = Vec::with_capacity(self.worker_count);
+        let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
+
         //
-        // //
-        // // calculate each worker's interval
-        // //
-        // for view in self.workers.values() {
-        //     // reproduction_intervals.push(lifespan / view.get_pass_rate());
-        // }
+        // calculate each worker's interval
         //
-        // for view in self.workers.values() {
-        //     // view.start(&"default".to_owned());
-        // }
+        for view in self.workers.values() {
+            reproduction_intervals.push(lifespan / view.get_pass_rate());
+        }
+
+        for view in self.workers.values() {
+            view.start(&"default".to_owned());
+        }
         // Spawn a thread for every worker, threads spend most of their time asleep, only waking
         // to pass their queues
-        // for interval in reproduction_intervals {
-        //     let mut lifespan = lifespan.clone();
+        for interval in reproduction_intervals {
+            let mut lifespan = lifespan.clone();
 
-            // pool.execute(move || {
-            // while lifespan > 0 {
-            //     for (_,value) in self.workers.iter(){
-            //         for neighbor in value.get_neighbors().iter() {
-            //             value.passq(neighbor);
-            //         }
-            //     }
-            //     lifespan -= interval;
-            //     thread::sleep_ms(interval);
-            // }
-                // });
-        // }
+            while lifespan > 0 {
+                for (_,value) in self.workers.iter(){
+                    for neighbor in value.get_neighbors().iter() {
+                        value.passq(neighbor);
+                    }
+                }
+                lifespan -= interval;
+                thread::sleep_ms(interval);
+            }
+        }
     }
 
     // pub fn serialize(&self) -> serde::json::Value {
