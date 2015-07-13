@@ -1,4 +1,3 @@
-#![feature(scoped)]
 /// FuzzerView
 ///
 /// # Usage
@@ -8,8 +7,6 @@
 extern crate serde;
 extern crate hyper;
 extern crate threadpool;
-
-use std::sync::mpsc::channel;
 use self::hyper::Client;
 use self::hyper::client::IntoUrl;
 use std::str::FromStr;
@@ -28,11 +25,11 @@ use self::fuzzererror::*;
 /// a network.
 ///
 /// FuzzerView
-pub trait FuzzerView {
+pub trait FuzzerView:Send + Sync {
     fn get_stats(&self) -> Result<Vec<String>,FuzzerError>;
-    fn passq(&self, &str) -> Result<(), FuzzerError>;
+    fn passq(&self, &str) -> Result<String, FuzzerError>;
     fn get_pass_rate(&self) -> u32;
-    fn start(&self, &str) -> Result<(), FuzzerError>;
+    fn start(&self, &str) -> Result<String, FuzzerError>;
     fn stop(&self) -> Result<(), FuzzerError>;
     fn get_neighbors(&self) -> Vec<String>;
     fn get_hostname(&self)  -> String;
@@ -116,15 +113,15 @@ impl FuzzerView for AFLView {
     }
 
     /// Commands the AFL Fuzzer to pass its queue to another host
-    fn passq(&self, host: &str) -> Result<(), FuzzerError> {
+    fn passq(&self, host: &str) -> Result<String, FuzzerError> {
         let client = Client::new();
-        // let mut s = String::new();
+        let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/passq";
         let url = url.into_url().unwrap();
         let mut res = try!(client.post(url).body(host).send());
-        // res.read_to_string(&mut s).unwrap();
-        Ok(())
+        res.read_to_string(&mut s).unwrap();
+        Ok(s)
     }
 
     fn get_pass_rate(&self) -> u32 {
@@ -132,15 +129,15 @@ impl FuzzerView for AFLView {
     }
 
     /// Commands the AFL Fuzzer to begin the fuzzing process
-    fn start(&self, msg: &str) -> Result<(), FuzzerError> {
+    fn start(&self, msg: &str) -> Result<String, FuzzerError> {
         let client = Client::new();
-        // let mut s = String::new();
+        let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/start";
         let url = url.into_url().unwrap();
         let mut res = try!(client.post(url).body(msg).send());
-        // res.read_to_string(&mut s).unwrap();
-        Ok(())
+        res.read_to_string(&mut s).unwrap();
+        Ok(s)
     }
 
     /// Commands the AFL Fuzzer to end the fuzzing process
@@ -150,7 +147,7 @@ impl FuzzerView for AFLView {
 
         let url =  self.hostname.clone() + &"/stop";
         let url = url.into_url().unwrap();
-        let mut res = try!(client.get(url).send());
+        try!(client.get(url).send());
         // res.read_to_string(&mut s).unwrap();
         Ok(())
     }
@@ -207,7 +204,7 @@ pub struct History  {
     lower_bound: u64,
     max_size: usize
 }
-
+#[allow(dead_code)]
 impl History  {
     pub fn new(size: usize) -> History  {
         History  {
@@ -221,7 +218,7 @@ impl History  {
     }
 
     pub fn get_average(&self) -> u64 {
-        if self.average_queue.len() == 0 {
+        if self.average_queue.is_empty() {
             0
         } else {
             let mut total : u64 = 0;
@@ -300,64 +297,74 @@ impl History  {
 ///
 /// # Examples
 /// ```rust
-/// let aflopts = AFLOpts {
-///     afl_path: "/path/to/afl-fuzz".to_owned(),
-///     target_path: "/path/to/target".to_owned(),
-///     ..Default::default()
+/// let structure = vec![("workera".into(),vec!["workerb".into()]),("workerb".into(),vec!["workera".into()])];
+///
+/// let mut network = Network::new();
+///
+/// for (host,targets) in structure {
+///     network.add_worker(
+///         Box::new(
+///             AFLView {
+///                 hostname: host,
+///                 neighbors: targets,
+///                 generation: 0,
+///                 pass_rate: 10,
+///                 args: vec!["default".into()]
+///             })
+///         )
 /// }
 /// ```
 /// A Network represents a network of FuzzerViews using a graph-like structure.
 // #[derive(Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Network {
     workers:BTreeMap<String,Box<FuzzerView>>,
-    history: History,
     worker_count: usize,
     generation: u64,
     mutation_rate: u64
 }
-
+#[allow(dead_code)]
 impl Network {
     /// Returns a new Network<T>
     pub fn new() -> Network {
         Network {
             workers:BTreeMap::new(),
             generation: 0,
-            history: History::new(100),
             mutation_rate: 500,
             worker_count: 0
         }
     }
-
+    /// Commands all workers in the network to end the fuzzing process
     pub fn stop(&self) {
         for view in self.workers.values() {
-            view.stop();
+            view.stop().ok().expect("Fuzzer stop command failed");
         }
     }
 
     /// Parents are selected for breeding based on their stats
     /// Children are created by Genetic Fuzzer, returned to us
     /// We select parents to die and children to replace them
-    fn selection(&self, parents: &BTreeMap<Box<FuzzerView>, u64>) {
-        unimplemented!();
-        //
-        // for (parent,_) in parents.into_iter() {
-        //     // alpha = parent;
-        //     parent
-        // };
-        //
-        // let mut cur_score = &0;
-        //
-        // for (parent, score) in parents.into_iter() {
-        //     if score > cur_score {
-        //         alpha = parent;
-        //         cur_score = score;
-        //     }
-        // }
-        //
-        // for (key,_) in parents.into_iter() {
-        //     key.reproduce_with(alpha);
-        // }
-    }
+    // fn selection(&self, parents: &BTreeMap<Box<FuzzerView>, u64>) {
+    //     unimplemented!();
+    //     //
+    //     // for (parent,_) in parents.into_iter() {
+    //     //     // alpha = parent;
+    //     //     parent
+    //     // };
+    //     //
+    //     // let mut cur_score = &0;
+    //     //
+    //     // for (parent, score) in parents.into_iter() {
+    //     //     if score > cur_score {
+    //     //         alpha = parent;
+    //     //         cur_score = score;
+    //     //     }
+    //     // }
+    //     //
+    //     // for (key,_) in parents.into_iter() {
+    //     //     key.reproduce_with(alpha);
+    //     // }
+    // }
 
 
     /// Currently adds up the paths_total, paths_found, max_depth and returns it
@@ -412,24 +419,24 @@ impl Network {
     // }
 
     /// Writes a serialized json representation of a network to 'path'
-    pub fn save_network(&self, path: &str) -> Result<(()),FuzzerError> {
-        unimplemented!();
-        // let net = json::to_value(self);
-        // let jnet = &net.as_string();
-        // let mut f = try!(File::create(&path));
-        // try!(f.write_all(jnet.unwrap().as_bytes()));
-        Ok(())
-    }
+    // pub fn save_network(&self, path: &str) -> Result<(()),FuzzerError> {
+    //     unimplemented!();
+    //     // let net = json::to_value(self);
+    //     // let jnet = &net.as_string();
+    //     // let mut f = try!(File::create(&path));
+    //     // try!(f.write_all(jnet.unwrap().as_bytes()));
+    //     Ok(())
+    // }
 
     /// The network scores itself by adding the score of every Fuzzer it monitors.
     // Should be moved to Genetic<T> trait impl
-    pub fn score(&self) -> u64 {
-        let mut score = 0;
-        for view in self.workers.values() {
-            // score += view.score_stats();
-        }
-        score
-    }
+    // pub fn score(&self) -> u64 {
+    //     let mut score = 0;
+    //     for view in self.workers.values() {
+    //         score += view.score_stats();
+    //     }
+    //     score
+    // }
 
     /// Returns a vector of optional worker scores. Scores are None when the worker could not
     /// be reached
@@ -445,38 +452,72 @@ impl Network {
         scores
     }
 
+    pub fn collect_scores_interval(&self, lifetime: &u32, interval: &u32, history: &mut History){
+        let interval = *lifetime / interval;
+        let mut lifetime = *lifetime;
+        while lifetime > 0 {
+            let scores = self.get_worker_scores();
+            let mut score = 0;
+
+            for s in scores {
+                if let Some(s) = s {
+                    score += s;
+                };
+            }
+
+            history.push(Some(score));
+
+            println!("Score:{}", score);
+            println!("Average Score:{}", history.get_average());
+            lifetime -= interval;
+            println!("collect_scores_interval sleeping for: {}", interval);
+            thread::sleep_ms(interval);
+        }
+
+    }
+
     /// Commands remote Fuzzer instances to begin work
     /// Takes a callback, which must return a value of PartialEq + Eq
     /// The lifespan is the total running time of this function
     /// reimplement callback later, I actually like that idea
-    pub fn fuzz(&self, lifespan: &u32) {
+    pub fn fuzz(&self) {
+        for view in self.workers.values() {
+            view.start(&"default".to_owned()).ok().expect("failed to fuzz");
+        }
+    }
 
-        let mut reproduction_intervals = Vec::with_capacity(self.worker_count);
-        let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
+    pub fn pass(&self, lifespan : &u32) {
+        let mut pass_intervals = Vec::with_capacity(self.worker_count);
+        // let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
 
         // calculate each worker's interval
         for view in self.workers.values() {
-            reproduction_intervals.push(lifespan / view.get_pass_rate());
+            let rate = match view.get_pass_rate() {
+                0   => *lifespan,
+                _   => view.get_pass_rate()
+            };
+
+            pass_intervals.push(lifespan / rate);
         }
 
-        for view in self.workers.values() {
-            view.start(&"default".to_owned());
-        }
         // Spawn a thread for every worker, threads spend most of their time asleep, only waking
         // to pass their queues
-        for interval in reproduction_intervals {
+        for interval in pass_intervals {
             let mut lifespan = lifespan.clone();
-
-            while lifespan > 0 {
-                for (_,value) in self.workers.iter(){
-                    for neighbor in value.get_neighbors().iter() {
-                        value.passq(neighbor);
+            thread::scoped(move || {
+                while lifespan > 0 {
+                    for (_,value) in self.workers.iter(){
+                        for neighbor in value.get_neighbors().iter() {
+                            value.passq(neighbor).ok().expect("failed to passq");
+                        }
                     }
+                    lifespan -= interval;
+                    println!("pass sleeping for: {}", interval);
+                    thread::sleep_ms(interval);
                 }
-                lifespan -= interval;
-                thread::sleep_ms(interval);
-            }
+            });
         }
+
     }
 
     // pub fn serialize(&self) -> serde::json::Value {
