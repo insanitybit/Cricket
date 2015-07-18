@@ -1,111 +1,87 @@
-#![feature(custom_derive, plugin)]
+#![feature(custom_derive, plugin, fs_walk, convert)]
 #![plugin(serde_macros)]
+#[macro_use]
+extern crate mopa;
 extern crate serde;
-
+extern crate hyper;
 mod fuzzerview;
+use serde::json::{self, Value};
+use serde::json::value::to_value;
+use serde::json::ser::to_string_pretty;
+use std::str::FromStr;
 use fuzzerview::{Network,AFLView,FuzzerView,History};
-use std::sync::{Arc,Mutex};
-use std::collections::VecDeque;
-use std::fs;
+use std::sync::{Arc, Mutex};
+use self::hyper::Client;
+use self::hyper::client::IntoUrl;
+// This is an example of using the Network structure of AFLView's to control AFL Fuzzing instances
+// from across the network.
+// In this example, the fuzzers are arranged in a circular linked list, with the queues being
+// waterfalled periodifically (40x per network lifetime, based on reproduction_rate) over the
+// the course of each Network's lifetime.
+// The network's lifetime in this case is one day, as indicated by the 'lifetime' variable.
+// This program will run 5 lifetimes of this network, so it should take 5 days.
 
-fn fill_population(population : &mut VecDeque<Network<AFLView>>, population_size : &usize) -> usize {
-    let cur = population.len();
-        match fs::read_dir("./population/") {
-            Err(why) => println!("! {:?}", why.kind()),
-            Ok(paths) => for path in paths {
-                if population.len() >= *population_size {return population.len() - cur}
-
-                let path = path.unwrap().path().to_str()
-                .unwrap().to_owned();
-
-                match Network::<AFLView>::load_network(path) {
-                    Ok(network)     => population.push_back(network),
-                    Err(_)          => continue
-                }
-            }
-        }
-    population.len() - cur
-}
-
-#[derive(PartialEq,Eq)]
-struct Score {
-    average: u64,
-    total: u64,
-    individuals: Vec<u64>
-}
-
-
-#[allow(unused_variables, unused_assignments)]
 fn main() {
-    let population_size : usize = 5;
-    let lifespan : u32 = 900000;
-    let mut population : VecDeque<Network<AFLView>>
-    = VecDeque::with_capacity(population_size);
+    // let client = Client::new();
+    // let res = client.get("http://ec2-52-5-167-142.compute-1.amazonaws.com/stats".to_owned().into_url().unwrap()).send();
+    // // println!("{:#?}", res);
+    // //
+    // let res = client.get("http://ec2-54-86-18-211.compute-1.amazonaws.com/stats".to_owned().into_url().unwrap()).send();
+    // // println!("{:#?}", res);
+    // //
+    // // return;
 
-    fill_population(&mut population, &population_size);
 
-    let mut history = 100;
-    let mut net_history = History ::new(population_size * history);
-    let mut fuz_history = History ::new(population_size * history);
-    let mut fuz_min_score = History ::new(population_size * history);
-    let mut fuz_max_score = History ::new(population_size * history);
+    let structure = vec![("workera".into(),vec!["workerb".into()]),("workerb".into(),vec!["workera".into()])];
 
-    let mut generation = 1;
+    let mut network = Network::new();
 
-    for network in population.iter() {
-        // Launch network, Begin fuzzing
-        network.fuzz(&100);
-        // Get scores for each worker
-        // The average total is stored
-        let worker_scores = network.get_worker_scores();
+    for (host,targets) in structure {
+        network.add_worker(
+            Box::new(
+                AFLView {
+                    hostname: host,
+                    neighbors: targets,
+                    generation: 0,
+                    pass_rate: 10,
+                    args: vec!["default".into()]
+                })
+            )
+    }
 
-        // If the score of a worker is upper_bound% higher than the average, it is stored in
-        // 'hi', if it is lower than lower_bound% relative to the average, it is stored in low
-        // Everything else will be stored in avg
-        let mut hi   =   Vec::with_capacity(worker_scores.len());
-        let mut avg  =   Vec::with_capacity(worker_scores.len());
-        let mut low  =   Vec::with_capacity(worker_scores.len());
+    // println!("{:#?}", &network);
 
-        let average = fuz_history.get_average();
-        let upper = ((100 * average) + (average * fuz_history.get_upper())) / 100;
-        let lower = ((100 * average) - (average * fuz_history.get_lower())) / 100;
+    let lifetime = 86400000; // lifetime determines how long a generation lasts in ms
+                             // currently set to 1 day in ms
+    let lifetime = 6000;
+    let mut history = History::new(1000);
 
-        for worker in worker_scores.iter() {
+    // This test will go for 5 days, stats will be collected once every day
+    let mut generation = 0;
+    let max_generations = 5;
+    while generation < max_generations {
+        println!("Fuzzing next generation");
+        network.fuzz(&lifetime);
 
-            let worker = match *worker {
-                Some(w) => Some(w),
-                None    => Some(average)
-            };
+        let scores = network.get_worker_scores();
+        let mut score = 0;
 
-            if worker.unwrap() > upper {
-                hi.push(worker);
-            } else if worker.unwrap() < lower {
-                low.push(worker);
-            } else {
-                avg.push(worker);
+        for s in scores {
+            match s {
+                Some(s) => score += s,
+                _   => ()
             }
-            fuz_history.push(worker);
         }
 
-        break;
+        history.push(Some(score));
+
+        println!("Score:{}", score);
+        println!("Average Score:{}", history.get_average());
+
+        generation += 1;
+        history.save_to_path("./history/afl_waterfall.history".into());
     }
+    network.stop();
 
-
-
-    for network in population {
-        // println!("{:?}",network);
-        //
-        // network.fuzz(&100);
-        // cur_score = network.score();
-        // println!("Current network score: {}", cur_score );
-        // tot_score += cur_score;
-        // avg_score = tot_score / generation;
-        //
-        // generation += 1;
-        // population.
-
-        break;
-    }
-    println!("End");
-
+    println!("Done");
 }
