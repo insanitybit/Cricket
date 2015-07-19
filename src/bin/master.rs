@@ -4,12 +4,13 @@
 extern crate mopa;
 extern crate serde;
 extern crate hyper;
-mod fuzzerview;
+extern crate cricket;
+
 use serde::json::{self, Value};
 use serde::json::value::to_value;
 use serde::json::ser::to_string_pretty;
 use std::str::FromStr;
-use fuzzerview::{Network,AFLView,FuzzerView,History};
+use cricket::*;//{Network,AFLView,FuzzerView,History};
 use std::thread;
 use std::sync::{Arc, Mutex};
 use self::hyper::Client;

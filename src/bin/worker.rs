@@ -5,6 +5,7 @@ extern crate iron;
 extern crate router;
 extern crate serde;
 extern crate hyper;
+extern crate cricket;
 
 use std::net;
 use hyper::Client;
@@ -17,9 +18,8 @@ use std::io::Read;
 use std::collections::BTreeMap;
 use std::default::Default;
 use std::sync::{Arc, Mutex};
-
-mod fuzzer;
-use fuzzer::{AFL,AFLOpts,Fuzzer};
+use cricket::*;
+// use cricket::{Network,AFL,Fuzzer,History};
 
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("SENDQ");
