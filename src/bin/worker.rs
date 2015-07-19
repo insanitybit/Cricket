@@ -23,7 +23,7 @@ use cricket::*;
 
 fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("SENDQ");
-    let client = Client::new();
+    let mut client = Client::new();
     let mut payload = String::with_capacity(64); // Around how long my AFLArgs are
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
