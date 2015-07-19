@@ -4,6 +4,7 @@
 ///
 /// The FuzzerView Module provides a simple interface to a group of remove fuzzer instances
 ///
+
 extern crate serde;
 extern crate hyper;
 extern crate threadpool;
@@ -17,7 +18,7 @@ use std::path::Path;
 use std::io::prelude::*;
 use std::error::Error;
 use std::thread;
-
+use std::sync::{Arc, Mutex};
 mod fuzzererror;
 use self::fuzzererror::*;
 
@@ -100,7 +101,7 @@ impl AFLView {
 impl FuzzerView for AFLView {
     /// Returns a String, representing the stats of the AFL instance behind this AFLView
     fn get_stats(&self) -> Result<Vec<String>, FuzzerError> {
-        let client = Client::new();
+        let mut client = Client::new();
         let mut s = String::with_capacity(512);
 
         let url =  self.hostname.clone() + &"/stats";
@@ -114,7 +115,7 @@ impl FuzzerView for AFLView {
 
     /// Commands the AFL Fuzzer to pass its queue to another host
     fn passq(&self, host: &str) -> Result<String, FuzzerError> {
-        let client = Client::new();
+        let mut client = Client::new();
         let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/passq";
@@ -130,7 +131,7 @@ impl FuzzerView for AFLView {
 
     /// Commands the AFL Fuzzer to begin the fuzzing process
     fn start(&self, msg: &str) -> Result<String, FuzzerError> {
-        let client = Client::new();
+        let mut client = Client::new();
         let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/start";
@@ -142,7 +143,7 @@ impl FuzzerView for AFLView {
 
     /// Commands the AFL Fuzzer to end the fuzzing process
     fn stop(&self) -> Result<(), FuzzerError> {
-        let client = Client::new();
+        let mut client = Client::new();
         // let mut s = String::new();
 
         let url =  self.hostname.clone() + &"/stop";
@@ -321,7 +322,8 @@ pub struct Network {
     workers:BTreeMap<String,Box<FuzzerView>>,
     worker_count: usize,
     generation: u64,
-    mutation_rate: u64
+    mutation_rate: u64,
+    living: Arc<Mutex<bool>>
 }
 #[allow(dead_code)]
 impl Network {
@@ -331,7 +333,8 @@ impl Network {
             workers:BTreeMap::new(),
             generation: 0,
             mutation_rate: 500,
-            worker_count: 0
+            worker_count: 0,
+            living: Arc::new(Mutex::new(false))
         }
     }
     /// Commands all workers in the network to end the fuzzing process
@@ -339,6 +342,9 @@ impl Network {
         for view in self.workers.values() {
             view.stop().ok().expect("Fuzzer stop command failed");
         }
+        let living = self.living.clone();
+        let mut living = living.lock().unwrap();
+        *living = false
     }
 
     /// Parents are selected for breeding based on their stats
@@ -500,18 +506,21 @@ impl Network {
             pass_intervals.push(lifespan / rate);
         }
 
+
+
         // Spawn a thread for every worker, threads spend most of their time asleep, only waking
         // to pass their queues
         for interval in pass_intervals {
             let mut lifespan = lifespan.clone();
+            let living = self.living.clone();
             thread::scoped(move || {
-                while lifespan > 0 {
+                let living = living.lock().unwrap();
+                while *living {
                     for (_,value) in self.workers.iter(){
                         for neighbor in value.get_neighbors().iter() {
                             value.passq(neighbor).ok().expect("failed to passq");
                         }
                     }
-                    lifespan -= interval;
                     println!("pass sleeping for: {}", interval);
                     thread::sleep_ms(interval);
                 }
