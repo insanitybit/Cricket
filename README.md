@@ -1,4 +1,7 @@
 # Cricket
+
+[![Build Status](https://travis-ci.org/insanitybit/Cricket.png)](https://travis-ci.org/insanitybit/Cricket)
+
 Cricket is a project to act as a distributed fuzzing harness, managing fuzzers
 across a network. Currently AFL (http://lcamtuf.coredump.cx/afl/) is supported.
 
