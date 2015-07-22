@@ -6,8 +6,8 @@ AFL is wrapped in a Fuzzer trait, so any other fuzzer that implements the trait
 will be compatible, allowing for different types of fuzzers to interact and share
 their corpora.
 
-Cricket provides a default struct, Network, that can manage 'views' of the fuzzers
-across a network. You can also build your own Network structures.
+Cricket provides a struct, Network, that can manage 'views' of the fuzzers
+across a network.
 
 # Status
 As the 'master.rs' and 'worker.rs' files will demonstrate, Cricket provides
