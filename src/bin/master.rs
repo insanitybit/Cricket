@@ -33,16 +33,12 @@ fn main() {
     // //
     // // return;
 
-
-    let structure = vec![
-                        ("http://workera".into(), vec!["http://workerb".into()]),
-                        ("http://workerb".into(), vec!["http://workera".into()])
-                    ];
-
     let network = Arc::new(Mutex::new(Network::new()));
     let history = Arc::new(Mutex::new(History::new(1000)));
 
     {
+        let structure = vec![("http://workera".into(), vec!["http://workerb".into()]),
+                             ("http://workerb".into(), vec!["http://workera".into()])];
         let network_build = network.clone();
 
         for (host,targets) in structure {
@@ -55,8 +51,7 @@ fn main() {
                         generation: 0,
                         pass_rate: 10,
                         args: vec!["default".into()]
-                    })
-                )
+                    }))
         }
     }
     // println!("{:#?}", &network);

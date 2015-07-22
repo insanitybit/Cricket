@@ -1,5 +1,5 @@
 [package]
-name = "Cricket"
+name = "cricket"
 version = "0.1.0"
 authors = ["insanitybit <insanitybit@gmail.com>"]
 
@@ -17,7 +17,11 @@ num_cpus = "*"
 csv = "*"
 rustc-serialize = "*"
 nickel = "*"
+mopa = "*"
 # rust-ini = "*"
+
+# [dependencies.clippy]
+# git = "https://github.com/Manishearth/rust-clippy"
 
 [dependencies.threadpool]
 version = "*"

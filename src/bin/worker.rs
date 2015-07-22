@@ -41,7 +41,7 @@ fn sendq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 
 fn recvq(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("RECVQ");
-    let mut payload = String::with_capacity(1024); // Reasonably sized file
+    let mut payload = String::with_capacity(1024); // Reasonably sized corpora file
     request.body.read_to_string(&mut payload)
     .unwrap_or_else(|e| panic!("{}",e));
 
@@ -62,8 +62,8 @@ fn stats(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("{:#?}",stats);
     Ok(Response::with(json::to_string(&stats).unwrap()))
 }
-//
-// Receive a message by POST and play it back.
+
+/// Starts the fuzzing process
 fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
     println!("START");
     let mut payload = String::with_capacity(64);
@@ -72,6 +72,7 @@ fn start(request: &mut Request, afl: &mut AFL) -> IronResult<Response> {
 
     let opts = afl.get_opts();
     let mut new_afl = AFL::new(opts);
+
     new_afl.launch(&payload);
 
     *afl = new_afl;

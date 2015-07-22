@@ -12,6 +12,7 @@ extern crate serde;
 extern crate hyper;
 extern crate threadpool;
 extern crate num_cpus;
+extern crate url;
 
 use std::fs;
 use std::{io,error};
@@ -32,15 +33,15 @@ use std::sync::mpsc::channel;
 use std::path::PathBuf;
 use std::default::Default;
 use std::process::{Command, Child, Stdio};
-
+use url::ParseError;
 /// A set of errors that can occur while dealing with a fuzzer or fuzzerview
 #[derive(Debug)]
 pub enum FuzzerError {
     IoError(io::Error),
     Ser(serde::json::error::Error),
     HyperError(hyper::error::Error),
-    AlreadyRunning // Ideally will extend to provide further information
-    // ParserError(url::parser::ParseError)
+    AlreadyRunning,
+    ParserError(ParseError)
 }
 
 impl fmt::Display for FuzzerError {
@@ -50,7 +51,7 @@ impl fmt::Display for FuzzerError {
             FuzzerError::Ser(ref err) => write!(f, "Parse error: {}", err),
             FuzzerError::HyperError(ref err) => write!(f, "Hyper error: {}", err),
             FuzzerError::AlreadyRunning => write!(f, "Fuzzer is already running!"),
-            // FuzzerError::ParserError(ref err) => write!(f, "URL error: {}", err),
+            FuzzerError::ParserError(_) => write!(f, "URL parse error"),
         }
     }
 }
@@ -62,7 +63,7 @@ impl error::Error for FuzzerError {
             FuzzerError::Ser(ref err)           => error::Error::description(err),
             FuzzerError::HyperError(ref err)    => err.description(),
             FuzzerError::AlreadyRunning         => &"Launch was called while the Fuzzer is running.",
-            // FuzzerError::ParserError(ref err) => error::Error::description(err),
+            FuzzerError::ParserError(_)         => &"URL parse error.",
         }
     }
 
@@ -71,9 +72,8 @@ impl error::Error for FuzzerError {
             FuzzerError::IoError(ref err) => Some(err),
             FuzzerError::Ser(ref err) => Some(err),
             FuzzerError::HyperError(ref err) => Some(err),
-            FuzzerError::AlreadyRunning     => None
-
-            // FuzzerError::ParserError(ref err) => Some(err),
+            FuzzerError::AlreadyRunning     => None,
+            FuzzerError::ParserError(_) => None,
         }
     }
 }
@@ -96,11 +96,12 @@ impl From<hyper::error::Error> for FuzzerError {
     }
 }
 
-// impl From<url::parser::ParseError> for FuzzerError {
-//     fn from(err: url::parser::ParseError) -> FuzzerError {
-//         FuzzerError::ParserError(err)
-//     }
-// }
+impl From<ParseError> for FuzzerError {
+    fn from(err: ParseError) -> FuzzerError {
+        FuzzerError::ParserError(err)
+
+    }
+}
 
 
 
@@ -207,6 +208,8 @@ impl FuzzerView for AFLView {
         Ok(s)
     }
 
+    /// Returns the pass rate for the FuzzerView. Pass rate is used to determine when a Fuzzer should
+    /// pass its corpora
     fn get_pass_rate(&self) -> u32 {
         self.pass_rate.clone()
     }
@@ -276,8 +279,7 @@ impl FuzzerView for AFLView {
 //
 // }
 
-/// A helper struct to manage a recorded history
-// I can probably optimize this quite a lot by writing this bit myself but for now, Vecue
+/// Manages and records a period of data, keeping it stored and sorted
 #[derive(Serialize, Deserialize, Debug)]
 pub struct History  {
     average_queue: Vec<u64>,
@@ -376,7 +378,7 @@ impl History  {
 }
 
 
-/// Network
+/// Provides an abstraction over a network of FuzzerViews
 ///
 /// # Examples
 /// ```rust
@@ -397,7 +399,7 @@ impl History  {
 ///         )
 /// }
 /// ```
-/// A Network represents a network of FuzzerViews using a graph-like structure.
+/// Represents a network of Fuzzers using FuzzerView objects.
 // #[derive(Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct Network {
@@ -540,10 +542,25 @@ impl Network {
         scores
     }
 
+    /// Scores all fuzzers within the network based on an interval over the course of a lifetime.
+    /// Results are stored in history.
+    ///
+    /// # Example
+    /// ```rust
+    /// // This network will be scored 10 times within a lifetime.
+    ///     let lifetime = 1000;
+    ///     let interval = 100;
+    ///     network_score.collect_scores_interval(&lifetime, &interval, &mut history_handle);
+    /// ```
+    ///
     pub fn collect_scores_interval(&self, lifetime: &u32, interval: &u32, history: &mut History){
         let interval = *lifetime / interval;
         let mut lifetime = *lifetime;
-        while lifetime > 0 {
+
+        let living_handle = self.living.clone();
+        let living_handle = living_handle.lock().unwrap();
+
+        while *living_handle {
             let scores = self.get_worker_scores();
             let mut score = 0;
 
@@ -565,15 +582,17 @@ impl Network {
     }
 
     /// Commands remote Fuzzer instances to begin work
-    /// Takes a callback, which must return a value of PartialEq + Eq
-    /// The lifespan is the total running time of this function
-    /// reimplement callback later, I actually like that idea
+    /// ```rust
+    /// network.fuzz();
+    /// ```
     pub fn fuzz(&self) {
         for view in self.workers.values() {
             view.start(&"default".to_owned()).ok().expect("failed to fuzz");
         }
     }
 
+    /// Commands FuzzerViews to pass their respective queues to one another based on individual
+    /// intervals.
     pub fn pass(&self, lifespan : &u32) {
         let mut pass_intervals = Vec::with_capacity(self.worker_count);
         // let pool = threadpool::ScopedPool::new(self.worker_count as u32);//replace with thread::scoped
@@ -587,8 +606,6 @@ impl Network {
 
             pass_intervals.push(lifespan / rate);
         }
-
-
 
         // Spawn a thread for every worker, threads spend most of their time asleep, only waking
         // to pass their queues
@@ -629,8 +646,8 @@ impl Network {
 
 /// Trait for types that represent a [Fuzzer](https://en.wikipedia.org/wiki/Fuzz_testing)
 ///
-/// Fuzzers must be able to send and recieve their synthesized content, provide information on
-/// its progress, and be initialized on command.
+/// Fuzzers must be able to send and recieve their corpora, provide information on their progress
+/// , and be initialized/terminated on command.
 pub trait Fuzzer {
     /// Returns a Vector of Strings representing the work the fuzzer has done.
     fn get_stats(&self) -> Vec<String>;
@@ -644,7 +661,7 @@ pub trait Fuzzer {
     fn stop(&mut self);
 }
 
-/// AFL Options.
+/// Contains options/ stateful information about an AFL instance
 ///
 /// # Examples
 /// ```rust
@@ -655,9 +672,9 @@ pub trait Fuzzer {
 /// }
 /// ```
 /// AFLOpts holds the AFL environment data, such as the path to the sync directory,
-/// whether AFL is currently running, and the scheme to use when creating fuzzers.
-#[derive(Clone)]
-#[derive(Serialize, Deserialize)]
+/// whether AFL is currently running, and the scheme to use when creating fuzzer sync folders.
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AFLOpts {
     pub afl_path: String,
     pub running: bool,
@@ -684,15 +701,19 @@ impl Default for AFLOpts {
     }
 }
 
-/// The AFL struct maintains an AFLOpts 'opts' (see AFLOpts), and a vector of
-/// afl process children 'instances'
+/// Provides an interface to one or many underlying afl-fuzz instances
 pub struct AFL {
     opts: AFLOpts,
     instances: Vec<Child>
 }
 
 impl AFL {
-    /// Takes AFLOpts struct, returns AFL struct.
+    /// Constructs a new AFL struct
+    /// # Example
+    /// ```rust
+    /// let opts = AFLOpts::new(..Default::default());
+    /// let afl = AFL::new(opts);
+    /// ```
     pub fn new(opts: AFLOpts) -> AFL {
         AFL {
             instances: Vec::with_capacity(opts.instance_count),
@@ -714,6 +735,15 @@ impl AFL {
         self.opts.clone()
     }
 
+    /// Returns a reference to the current AFLOpts struct.
+    pub fn get_opts_ref<'a>(&'a self) -> &'a AFLOpts {
+        &self.opts
+    }
+
+    /// Returns a mutable reference to the current AFLOpts struct.
+    pub fn get_opts_mut<'a>(&'a mut self) -> &'a mut AFLOpts {
+        &mut self.opts
+    }
     /// Unimplemented
     #[allow(unused_variables,dead_code)]
     pub fn get_config(&mut self, argcsv: &str) -> *mut AFL {
@@ -753,14 +783,14 @@ impl AFL {
 }
 
 impl Fuzzer for AFL {
-    /// Spawns instance_count number of afl fuzzers
+    /// Spawns 'self.instance_count' number of afl fuzzers
     fn launch(&mut self, args: &str) -> Result<(),FuzzerError> {
         if self.opts.running {return Err(FuzzerError::AlreadyRunning)}
         let profile = self.get_profile(&args);
         self.opts.running = true;
         for it in 0..self.opts.instance_count {
             self.instances.push(
-                try!(Command::new(self.opts.afl_path.clone())
+                try!(Command::new(&self.opts.afl_path)
                          .args(&profile[it])
                          .stdout(Stdio::piped())
                          .spawn())
