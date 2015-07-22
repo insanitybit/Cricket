@@ -2,8 +2,9 @@ language: rust
 rust: nightly
 script:
   - cargo build --verbose
-  - cargo doc
+
 after_success:
+  - cargo doc
   - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && bash deploy.sh
 
 env:
