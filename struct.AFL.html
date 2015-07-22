@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `AFL` struct in crate `cricket`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, AFL">
+
+    <title>cricket::AFL - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='index.html'>cricket</a></p><script>window.sidebarCurrent = {name: 'AFL', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>cricket</a>::<wbr><a class='struct' href=''>AFL</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-5167' class='srclink' href='../src/cricket/lib.rs.html#705-708' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct AFL {
+    // some fields omitted
+}</pre><div class='docblock'><p>Provides an interface to one or many underlying afl-fuzz instances</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../cricket/struct.AFL.html' title='cricket::AFL'>AFL</a></code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(opts: <a class='struct' href='../cricket/struct.AFLOpts.html' title='cricket::AFLOpts'>AFLOpts</a>) -&gt; <a class='struct' href='../cricket/struct.AFL.html' title='cricket::AFL'>AFL</a></code></h4>
+<div class='docblock'><p>Constructs a new AFL struct</p>
+
+<h1 id="example" class='section-header'><a
+                           href="#example">Example</a></h1><pre class='rust rust-example-rendered'>
+<span class='kw'>let</span> <span class='ident'>opts</span> <span class='op'>=</span> <span class='ident'>AFLOpts</span>::<span class='ident'>new</span>(..<span class='ident'>Default</span>::<span class='ident'>default</span>());
+<span class='kw'>let</span> <span class='ident'>afl</span> <span class='op'>=</span> <span class='ident'>AFL</span>::<span class='ident'>new</span>(<span class='ident'>opts</span>);</pre>
+</div><h4 id='method.get_opts' class='method'><code>fn <a href='#method.get_opts' class='fnname'>get_opts</a>(&amp;self) -&gt; <a class='struct' href='../cricket/struct.AFLOpts.html' title='cricket::AFLOpts'>AFLOpts</a></code></h4>
+<div class='docblock'><p>Returns a copy of the current AFLOpts struct.</p>
+
+<h1 id="example" class='section-header'><a
+                           href="#example">Example</a></h1><pre class='rust rust-example-rendered'>
+<span class='comment'>// Example of increasing afl instance_count after launch</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>opts</span> <span class='op'>=</span> <span class='ident'>afl</span>.<span class='ident'>get_opts</span>();          <span class='comment'>// Get mutable copy of current opts</span>
+<span class='ident'>opts</span>.<span class='ident'>instance_count</span> <span class='op'>+=</span> <span class='number'>2</span>;               <span class='comment'>// Modify copy accordingly</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new_afl</span> <span class='op'>=</span> <span class='ident'>afl</span>::<span class='ident'>AFL</span>::<span class='ident'>new</span>(<span class='ident'>opts</span>);  <span class='comment'>// Create new AFL instalce with opts</span>
+<span class='op'>*</span><span class='ident'>afl</span> <span class='op'>=</span> <span class='ident'>new_afl</span>;                         <span class='comment'>//</span></pre>
+</div><h4 id='method.get_opts_ref' class='method'><code>fn <a href='#method.get_opts_ref' class='fnname'>get_opts_ref</a>&lt;'a&gt;(&amp;'a self) -&gt; &amp;'a <a class='struct' href='../cricket/struct.AFLOpts.html' title='cricket::AFLOpts'>AFLOpts</a></code></h4>
+<div class='docblock'><p>Returns a reference to the current AFLOpts struct.</p>
+</div><h4 id='method.get_opts_mut' class='method'><code>fn <a href='#method.get_opts_mut' class='fnname'>get_opts_mut</a>&lt;'a&gt;(&amp;'a mut self) -&gt; &amp;'a mut <a class='struct' href='../cricket/struct.AFLOpts.html' title='cricket::AFLOpts'>AFLOpts</a></code></h4>
+<div class='docblock'><p>Returns a mutable reference to the current AFLOpts struct.</p>
+</div><h4 id='method.get_config' class='method'><code>fn <a href='#method.get_config' class='fnname'>get_config</a>(&amp;mut self, argcsv: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.pointer.html'>*mut <a class='struct' href='../cricket/struct.AFL.html' title='cricket::AFL'>AFL</a></a></code></h4>
+<div class='docblock'><p>Unimplemented</p>
+</div><h4 id='method.get_profile' class='method'><code>fn <a href='#method.get_profile' class='fnname'>get_profile</a>(&amp;self, args: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;&gt;</code></h4>
+<div class='docblock'><p>&quot;$ ./afl-fuzz -i testcase_dir -o sync_dir -S fuzzer03 [...other stuff...]&quot;
+Based on &#39;args&#39;, generates arguments for AFL
+Should be moved out of afl.rs to the server
+Currently only provides a single profile, eventually
+there will be an &#39;add_profile</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl <a class='trait' href='../cricket/trait.Fuzzer.html' title='cricket::Fuzzer'>Fuzzer</a> for <a class='struct' href='../cricket/struct.AFL.html' title='cricket::AFL'>AFL</a></code></h3><div class='impl-items'><h4 id='method.launch' class='method'><code>fn <a href='../cricket/trait.Fuzzer.html#method.launch' class='fnname'>launch</a>(&amp;mut self, args: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, <a class='enum' href='../cricket/enum.FuzzerError.html' title='cricket::FuzzerError'>FuzzerError</a>&gt;</code></h4>
+<h4 id='method.stop' class='method'><code>fn <a href='../cricket/trait.Fuzzer.html#method.stop' class='fnname'>stop</a>(&amp;mut self)</code></h4>
+<h4 id='method.putq' class='method'><code>fn <a href='../cricket/trait.Fuzzer.html#method.putq' class='fnname'>putq</a>(&amp;self, newq: &amp;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;)</code></h4>
+<h4 id='method.getq' class='method'><code>fn <a href='../cricket/trait.Fuzzer.html#method.getq' class='fnname'>getq</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;</code></h4>
+<h4 id='method.get_stats' class='method'><code>fn <a href='../cricket/trait.Fuzzer.html#method.get_stats' class='fnname'>get_stats</a>(&amp;self) -&gt; <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div>
+            <div class="shortcuts">
+                <h1>Keyboard Shortcuts</h1>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h1>Search Tricks</h1>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>typedef</code> (or
+                    <code>tdef</code>).
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code>)
+                </p>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "cricket";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>
