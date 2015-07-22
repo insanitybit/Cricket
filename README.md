@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/insanitybit/Cricket.png)](https://travis-ci.org/insanitybit/Cricket)
 
+Documentation is available [here](https://insanitybit.github.io/Cricket/cricket/)
+
 Cricket is a project to act as a distributed fuzzing harness, managing fuzzers
 across a network. Currently AFL (http://lcamtuf.coredump.cx/afl/) is supported.
 
@@ -20,6 +22,3 @@ stats on the fuzzers success. I've tested this on ec2 instances myself, and
 it worked quite well.
 
 See issues for future development.
-
-# Documentation
-[Here](https://insanitybit.github.io/Cricket/cricket/)
