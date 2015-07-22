@@ -1,10 +1,10 @@
 language: rust
 rust: nightly
 script:
-  - cargo build --verbose
-
+- cargo build --verbose
 after_success:
-  - cargo doc
-  - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && bash deploy.sh
-
-secure: W5swTYrAJkG+rZy9RUV0pc9kMZ7SxbK9QZkrJAifql+F4HQ/kbtQPuluRjK1YuWvxC+27mblOeGx6ig55aJ1dE3+ujCjQVCTLEi7jGsUu9zHRx2oa/+EreboJ8hIiM881QBRSYup5wAhRZ+K0tVOo7B0Qh5RxjiTKJ7eGj5WgYIUlB/h2JeGv4HS8MlFPFtBHF4vfEaAwiFKh+cNlSE8ECpqfjoQ2l6Wj0c01zs/JwReV4SXpLedN3Ooe+pla0YuNWhYzi4hVnGNZMU2nrS47RNQyBIG2EGAOYO/5+c8dV2Y8zNNCgzgqHX5UM3zT8OcwJnbC7mIONLHJ513/pAO3q3/SNqUCUz59ui3VL2W9JmxZf6pM61D1jJ36MErbrdgyniQ75Wr1YG+4xSTU0ED14pA2EFdDUEd9HsgrJdzeWZzNzlxyuDSzoqvfLBZYHEBvuVStT2BIlndz7fUJCrjTrMa2GLlT4qVHlGhsbYWs2A6Ufn9qabiPVEnBSRkyQSuDiQGxOf1hpg7yaa7E8TV8Bl1M6E5/hH6jHLnDyzMbmZL/6sfO6BTegLwAVudIRlNQlrKr/WdOXpfIi1KTngOJX5WextU5EZkisHVbdVrWufoBrtfB5dPhEz2wMwj74JqLt2n2lXMzH1937qRh+JCs5tBlIqqOPhP2+5EU9hGnYY=
+- cargo doc
+- test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && bash deploy.sh
+env:
+  global:
+  - secure: UNMFgfqtYsf249eimjShzdDzb85EALHuEz1awhLGaojnq7szpNeVKab6MrcqyCZBKEyEoh2LAniAog6Y+0WA8A+Po7SoeLrMbTv+Dfrahl1NOaNqqTEm24egVOdX2rFPHYyBh9vu8vGbKuWkjbp3KhES8y80UAukI1DdA1NpgWA8YHWOiRCTjTtXrFOFsOUwbpQ5syiOU6vuZDQfGjg58AeJRXUQyYT8gDBc2mEIFJuvhNpxrIBr4op6+wdjuDPOzPUC9DdbTLLCDKKNxXw0uopu+ezGYr4aq4XJQlHF1vOF7rn8iZVg6kgN2nlpqzxArRMzWvAl4oyGxWyExBJYsZWm6GO1oWyXGGYDc7jXyz5gVd4KONd6Y/Q+yp6jt1Xj3bof4u/APXn4elN4rofth5SjSLrWIufe4uMIY8xM+jfoEtArFtGdMmu3uZwNvy4YeRh7zvqBL2tILR5j/cTTNk0sXk1+z2babuc3EVSig7TDDhMCpxZbzp4CavB7CjOMboBQU3wjVYGB/lVaAU4t4Whz+mWP5VIe9qElNQEv3eqVygdujEffr2OG8NrhGeF3ONyuImJk1k5UDV/UU3ne8zRL9AoaRTkBvRlUeJyuZsAB+1+UF7N9NhtbCM3Qxd/PTe/8OkxntYc997X3+FQxVQWIt/9Q/k4u5c6hQbgwMco=
