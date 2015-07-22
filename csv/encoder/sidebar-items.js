@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["Encoded","A record to be encoded."]]});

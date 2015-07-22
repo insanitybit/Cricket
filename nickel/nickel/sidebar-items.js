@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["Nickel","Nickel is the application object. It's the surface that holds all public APIs."]]});

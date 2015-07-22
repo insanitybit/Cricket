@@ -1,1 +1,0 @@
-initSidebarItems({"enum":[["QuoteStyle","The quoting style to use when writing CSV data."]],"struct":[["Writer","A CSV writer."]]});

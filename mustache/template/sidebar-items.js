@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["Template","`Template` represents a compiled mustache file."]]});
