@@ -1,5 +1,5 @@
 # Cricket
-Cricket is a project to act as a distributed fuzzing harness, managing them
+Cricket is a project to act as a distributed fuzzing harness, managing fuzzers
 across a network. Currently AFL (http://lcamtuf.coredump.cx/afl/) is supported.
 
 AFL is wrapped in a Fuzzer trait, so any other fuzzer that implements the trait
