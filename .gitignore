@@ -1,5 +1,6 @@
 # Cricket
 Cargo.lock
+target/
 
 # Logs
 logs
