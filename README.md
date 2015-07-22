@@ -22,4 +22,4 @@ it worked quite well.
 See issues for future development.
 
 # Documentation
-Rustdoc documentation coming once I figure out where to put it.
+Rustdoc documentation coming.
