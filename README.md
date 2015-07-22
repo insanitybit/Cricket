@@ -22,4 +22,4 @@ it worked quite well.
 See issues for future development.
 
 # Documentation
-Rustdoc documentation coming.
+[Here](https://insanitybit.github.io/Cricket/cricket/)
