@@ -132,7 +132,7 @@ pub trait FuzzerView:Send + Sync {
 // }
 
 
-/// AFLView
+/// Struct representing an AFL Fuzzer across a network
 ///
 /// # Examples
 /// ```rust
