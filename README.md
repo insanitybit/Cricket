@@ -11,7 +11,8 @@ AFL is wrapped in a Fuzzer trait, so any other fuzzer that implements the trait
 will be compatible, allowing for different types of fuzzers to interact and share
 their corpora.
 
-Cricket provides a struct, Network, that can manage 'views' of the fuzzers
+On the server side there is a FuzzerView trait, implemented by an AFLView struct.
+Cricket provides a struct, Network, that can manage these views of the fuzzers
 across a network.
 
 # Status
