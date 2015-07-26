@@ -83,10 +83,10 @@ codings indicated by Content-Encoding are decoded.</p>
 <span class='kw'>use</span> <span class='ident'>hyper</span>::<span class='ident'>mime</span>::{<span class='ident'>Mime</span>, <span class='ident'>TopLevel</span>, <span class='ident'>SubLevel</span>, <span class='ident'>Attr</span>, <span class='ident'>Value</span>};
 
 <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>headers</span> <span class='op'>=</span> <span class='ident'>Headers</span>::<span class='ident'>new</span>();
+
 <span class='ident'>headers</span>.<span class='ident'>set</span>(
     <span class='ident'>ContentType</span>(<span class='ident'>Mime</span>(<span class='ident'>TopLevel</span>::<span class='ident'>Application</span>, <span class='ident'>SubLevel</span>::<span class='ident'>Json</span>,
                      <span class='macro'>vec</span><span class='macro'>!</span>[(<span class='ident'>Attr</span>::<span class='ident'>Charset</span>, <span class='ident'>Value</span>::<span class='ident'>Utf8</span>)]))
-
 );</pre>
 </div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../../hyper/header/struct.ContentType.html' title='hyper::header::ContentType'>ContentType</a></code></h3><div class='impl-items'><h4 id='method.json' class='method'><code>fn <a href='#method.json' class='fnname'>json</a>() -&gt; <a class='struct' href='../../hyper/header/struct.ContentType.html' title='hyper::header::ContentType'>ContentType</a></code></h4>
 <div class='docblock'><p>A constructor  to easily create a <code>Content-Type: application/json; charset=utf-8</code> header.</p>

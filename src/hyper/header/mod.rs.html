@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="Source to the Rust file `/home/travis/.cargo/registry/src/github.com-0a35038f75765ae4/hyper-0.6.4/src/header/mod.rs`.">
+    <meta name="description" content="Source to the Rust file `/home/travis/.cargo/registry/src/github.com-0a35038f75765ae4/hyper-0.6.6/src/header/mod.rs`.">
     <meta name="keywords" content="rust, rustlang, rust-lang">
 
     <title>mod.rs.html -- source</title>
@@ -825,11 +825,6 @@
 <span id="783">783</span>
 <span id="784">784</span>
 <span id="785">785</span>
-<span id="786">786</span>
-<span id="787">787</span>
-<span id="788">788</span>
-<span id="789">789</span>
-<span id="790">790</span>
 </pre><pre class='rust '>
 <span class='doccomment'>//! Headers container, and common header fields.</span>
 <span class='doccomment'>//!</span>
@@ -1215,9 +1210,7 @@
             }
         }
 
-        <span class='kw'>let</span> <span class='ident'>result</span> <span class='op'>=</span> <span class='ident'>Headers</span>::<span class='ident'>new</span>();
-        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>deserializer</span>.<span class='ident'>visit_map</span>(<span class='ident'>HeadersVisitor</span>));
-        <span class='prelude-val'>Ok</span>(<span class='ident'>result</span>)
+        <span class='ident'>deserializer</span>.<span class='ident'>visit_map</span>(<span class='ident'>HeadersVisitor</span>)
     }
 }
 
@@ -1491,11 +1484,8 @@
         <span class='ident'>headers</span>.<span class='ident'>set</span>(<span class='ident'>Host</span> { <span class='ident'>hostname</span>: <span class='string'>&quot;foo.bar&quot;</span>.<span class='ident'>to_owned</span>(), <span class='ident'>port</span>: <span class='prelude-val'>None</span> });
 
         <span class='kw'>let</span> <span class='ident'>s</span> <span class='op'>=</span> <span class='ident'>headers</span>.<span class='ident'>to_string</span>();
-        <span class='comment'>// hashmap&#39;s iterators have arbitrary order, so we must sort first</span>
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pieces</span> <span class='op'>=</span> <span class='ident'>s</span>.<span class='ident'>split</span>(<span class='string'>&quot;\r\n&quot;</span>).<span class='ident'>collect</span>::<span class='op'>&lt;</span><span class='ident'>Vec</span><span class='op'>&lt;</span><span class='kw-2'>&amp;</span><span class='ident'>str</span><span class='op'>&gt;&gt;</span>();
-        <span class='ident'>pieces</span>.<span class='ident'>sort</span>();
-        <span class='kw'>let</span> <span class='ident'>s</span> <span class='op'>=</span> <span class='ident'>pieces</span>.<span class='ident'>into_iter</span>().<span class='ident'>rev</span>().<span class='ident'>collect</span>::<span class='op'>&lt;</span><span class='ident'>Vec</span><span class='op'>&lt;</span><span class='kw-2'>&amp;</span><span class='ident'>str</span><span class='op'>&gt;&gt;</span>().<span class='ident'>connect</span>(<span class='string'>&quot;\r\n&quot;</span>);
-        <span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>s</span>, <span class='string'>&quot;Host: foo.bar\r\nContent-Length: 15\r\n&quot;</span>);
+        <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>s</span>.<span class='ident'>contains</span>(<span class='string'>&quot;Host: foo.bar\r\n&quot;</span>));
+        <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>s</span>.<span class='ident'>contains</span>(<span class='string'>&quot;Content-Length: 15\r\n&quot;</span>));
     }
 
     <span class='attribute'>#[<span class='ident'>test</span>]</span>
