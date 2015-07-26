@@ -1,6 +1,7 @@
 #![feature(custom_derive, plugin, fs_walk, convert, scoped)]
 #![plugin(serde_macros)]
 #[macro_use]
+
 extern crate mopa;
 extern crate serde;
 extern crate hyper;
@@ -15,6 +16,7 @@ use std::thread;
 use std::sync::{Arc, Mutex};
 use self::hyper::Client;
 use self::hyper::client::IntoUrl;
+
 // This is an example of using the Network structure of AFLView's to control AFL Fuzzing instances
 // from across the network.
 // In this example, the fuzzers are arranged in a circular linked list, with the queues being
